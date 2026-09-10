@@ -1,0 +1,13 @@
+[package]
+name = "ccn-core"
+description = "The mediation map: Claude Code tool names to nucleus tool-proxy routes, and the totality law over them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

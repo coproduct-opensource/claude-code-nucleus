@@ -1,0 +1,7 @@
+{
+  "name": "nucleus",
+  "description": "Route every Claude Code tool call through a nucleus Firecracker microVM under an information-flow permission lattice, with a signed mediation receipt per call.",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "homepage": "https://github.com/coproduct-opensource/claude-code-nucleus"
+}

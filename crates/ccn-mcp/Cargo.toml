@@ -1,0 +1,19 @@
+[package]
+name = "ccn-mcp"
+description = "stdio MCP server that executes Claude Code tool calls inside a nucleus Firecracker pod"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ccn-mcp"
+path = "src/main.rs"
+
+[dependencies]
+ccn-core = { path = "../ccn-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

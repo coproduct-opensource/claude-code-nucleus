@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "nucleus": {
+      "command": "ccn-mcp",
+      "env": {
+        "NUCLEUS_POD_SOCK": "/run/nucleus/pod.sock"
+      }
+    }
+  }
+}

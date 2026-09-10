@@ -1,0 +1,19 @@
+{
+  "description": "Complete mediation: no built-in tool executes on the host.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/ccn-gate",
+            "args": [],
+            "timeout": 10,
+            "statusMessage": "nucleus: checking mediation"
+          }
+        ]
+      }
+    ]
+  }
+}

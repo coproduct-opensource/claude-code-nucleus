@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mediation:
+    name: complete mediation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # The mediation law and its falsifiers. This is the gate that matters:
+      # it decides from source alone, so it needs no pod and no network.
+      - name: The mediation law
+        run: cargo test --workspace
+
+      # A hook that fails open is worse than no hook. Probe the boundary
+      # red-then-green on the real binary rather than trusting the unit tests,
+      # because what ships is the binary.
+      - name: The gate is fail-closed on a real binary
+        run: |
+          set -euo pipefail
+          cargo build --release -p ccn-gate
+          gate=./target/release/ccn-gate
+
+          probe() {
+            echo "$2" | "$gate" | grep -q "\"permissionDecision\":\"$1\"" \
+              || { echo "FAIL: expected $1 for: $2"; exit 1; }
+          }
+
+          # A consequential built-in is denied and redirected.
+          probe deny  '{"hook_event_name":"PreToolUse","tool_name":"Bash"}'
+          # A tool this build has never heard of is denied, not allowed.
+          probe deny  '{"hook_event_name":"PreToolUse","tool_name":"ToolFromTheFuture"}'
+          # Unparsable input is denied rather than crashing into a default.
+          probe deny  'not json at all'
+          # The mediated path itself is permitted, or the redirect deadlocks.
+          probe allow '{"hook_event_name":"PreToolUse","tool_name":"mcp__nucleus__run"}'
+
+          echo "OK: the gate refused every unmediated path"
+
+  vendor-seam:
+    name: the seam holds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The point of this repo is that vendor knowledge lives HERE so nucleus
+      # can stay clean. The failure mode is the reverse of nucleus's gate: a
+      # nucleus internal leaking into this tree means the seam moved.
+      - name: No nucleus internals vendored into the bridge
+        run: |
+          set -euo pipefail
+          if grep -rInE 'nucleus[_-](ifc|policy|kernel|portcullis)' crates/ --include='*.rs'; then
+            echo "FAIL: this bridge must talk to nucleus over its wire surface, not link its internals" >&2
+            exit 1
+          fi
+          echo "OK: the bridge depends on routes, not on nucleus internals"
