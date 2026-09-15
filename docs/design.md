@@ -6,7 +6,7 @@ because the shape is what makes the security property checkable rather than mere
 ## The near-isomorphism nobody planned
 
 Claude Code's built-in tools and nucleus's pod-local tool-proxy routes were designed years apart by
-people solving different problems. They line up almost exactly:
+people solving different problems. Their *routes* line up almost exactly:
 
 | Claude Code built-in | `nucleus-tool-proxy` route |
 |---|---|
@@ -23,8 +23,33 @@ That is not a coincidence so much as convergent design: both are enumerations of
 coding agent can have on the world*, and there are not many. Nucleus's own
 `DISALLOWED_BUILTIN_TOOLS` constant lists the same set from the other direction.
 
-The consequence is that the bridge is not an adapter with special cases. It is a **map between two
-alphabets of effects**, and the interesting content is the two places it is not a bijection:
+### Their bodies do not line up at all
+
+The alignment above is real and it is only about routes, which is a distinction worth stating
+because the bridge shipped without it and every mediated call failed. `Read` sends `file_path`;
+`/v1/read` deserialises `path` and answers `422` to anything else. `Write` sends `content` against
+`contents`; `Glob` sends `path` against `directory`. `Bash` sends a command *string* and `/v1/run`
+takes an argument *vector*, because there is no shell inside the pod to turn one into the other —
+and nucleus's default command policy blocks `sh -c`, so there is no wrapping it either.
+
+So `ccn-mcp`'s `translate` module is the part of the bridge that is genuinely an adapter rather than
+a map. Two consequences shape it:
+
+- **The vocabulary difference is hidden; the semantic one is not.** Renaming `file_path` to `path`
+  costs the model nothing and keeps the gate's redirect actionable with the arguments already in
+  hand. But splitting `ls | wc -l` on whitespace would run `ls` against the literal arguments `|`
+  and `wc`, report success, and have done something else — so shell syntax is **refused with the
+  reason and the tool that does express it**, and `run`'s own description says there is no shell.
+- **A dependency on another repo's field names is written down.** `contracts/tool-proxy-requests.json`
+  records the proxy's `Deserialize` structs at a pinned commit. A unit test asserts the translation
+  emits only fields those structs accept — offline, no pod — and a CI job re-derives the same tables
+  from nucleus's source, so a rename there fails a build here.
+
+This is the one place the functor leaks, and the leak is worth naming rather than smoothing over:
+the *objects* correspond, the *morphisms* had to be written by hand.
+
+At the level of names, then, the bridge is a **map between two alphabets of effects**, and the
+interesting content is the two places it is not a bijection:
 
 - **Three-to-one on the left.** `Write`, `Edit` and `NotebookEdit` all land on `/v1/write`. The
   collapse is forced: the pod owns the file, so an edit computed on the host would be a write the

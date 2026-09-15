@@ -67,9 +67,10 @@ fn main() {
 
     match disposition(&event.tool_name) {
         Disposition::Mediated { mcp_tool, .. } => emit_deny(&format!(
-            "`{}` does not run on the host. Call `mcp__{MCP_SERVER}__{mcp_tool}` instead — same \
+            "`{}` does not run on the host. Call `mcp__{MCP_SERVER}__{mcp_tool}` instead — the same \
              arguments, executed inside the Firecracker pod under the nucleus permission lattice, \
-             and it returns a signed mediation receipt.",
+             returning a signed mediation receipt. Read that tool's schema before retrying: the pod \
+             honours most of the built-in's arguments but not all of them, and it has no shell.",
             event.tool_name
         )),
         Disposition::Denied { reason } => emit_deny(&format!(

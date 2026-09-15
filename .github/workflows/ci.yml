@@ -53,6 +53,19 @@ jobs:
 
           echo "OK: the gate refused every unmediated path"
 
+  contract:
+    name: the proxy still deserialises what we send
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # `the_translation_emits_only_fields_the_route_deserialises` proves the
+      # translation matches contracts/tool-proxy-requests.json. Nothing in this
+      # repo can prove the contract still matches *nucleus*. This does, by
+      # reading its Deserialize structs at the pinned commit — so a rename over
+      # there fails a build here instead of 422ing in a session.
+      - name: The contract matches nucleus's request structs
+        run: ./ci/check-proxy-contract.sh
+
   vendor-seam:
     name: the seam holds
     runs-on: ubuntu-latest

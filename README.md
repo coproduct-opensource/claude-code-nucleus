@@ -125,6 +125,23 @@ Or install the whole thing as a plugin — the manifest in `.claude-plugin/` shi
 The socket wins when both are set. Silently preferring the weaker of two configured transports is
 how a deployment ends up authenticating with a bearer token nobody knew was still in use.
 
+## What the model will find inside the pod
+
+The mediated tools keep the built-ins' argument names — `ccn-mcp` translates them to the proxy's
+(`file_path` → `path`, `content` → `contents`, `Glob`'s `path` → `directory`), so a redirect is
+actionable with the arguments already in hand. Four differences are *not* hidden, because the pod
+cannot honour them and a bridge that pretended otherwise would fail on the far side:
+
+| | |
+|---|---|
+| **`run` has no shell.** | `/v1/run` executes one program with arguments, and nucleus's default command policy blocks `sh -c`. Pipes, `&&`, `;`, redirection, `$VAR`, backticks and unquoted globs are **refused with the reason and the tool that does express it** — never split on whitespace and passed through, which would run `ls` against the literal arguments `|` and `wc`. Quoting and backslash escapes work. Use `run`'s `directory` instead of `cd`. |
+| **`write` needs an existing parent.** | `run mkdir -p <dir>` first. |
+| **`read` returns the whole file.** | There is no `offset`/`limit`. |
+| **`web_fetch` does not summarise.** | It returns the response; the built-in's `prompt` has no analogue. |
+
+Paths may be absolute under the pod's `work_dir` or relative to it; anything else is refused as a
+sandbox escape.
+
 ## Verify it is on
 
 ```sh

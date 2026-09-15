@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "The request bodies `nucleus-tool-proxy` deserialises, transcribed from its",
+    "`#[derive(Deserialize)]` structs. This bridge's correctness depends on field",
+    "names in another repository, so they are written down here and checked two ways:",
+    "",
+    "  1. `translate::to_proxy_body` is asserted against this file by",
+    "     `the_translation_emits_only_fields_the_route_deserialises` — every key it",
+    "     emits is a field the route has, and every required field is emitted.",
+    "  2. CI's `contract` job clones nucleus at `_nucleus_commit` and re-derives",
+    "     these tables from its source, so a rename over there fails a build here",
+    "     instead of becoming a 422 in somebody's session.",
+    "",
+    "Check (1) runs offline and is the one that gates every PR; (2) is what keeps",
+    "this file honest."
+  ],
+  "_nucleus_repo": "https://github.com/coproduct-opensource/nucleus",
+  "_nucleus_commit": "f86d961ec",
+  "_nucleus_source": "crates/nucleus-tool-proxy/src/main.rs",
+  "routes": {
+    "/v1/read": {
+      "struct": "ReadRequest",
+      "required": ["path"],
+      "optional": []
+    },
+    "/v1/write": {
+      "struct": "WriteRequest",
+      "required": ["path", "contents"],
+      "optional": []
+    },
+    "/v1/run": {
+      "struct": "RunRequest",
+      "required": ["args"],
+      "optional": ["stdin", "directory", "timeout_seconds"]
+    },
+    "/v1/glob": {
+      "struct": "GlobRequest",
+      "required": ["pattern"],
+      "optional": ["directory", "max_results"]
+    },
+    "/v1/grep": {
+      "struct": "GrepRequest",
+      "required": ["pattern"],
+      "optional": ["path", "glob", "context_lines", "max_matches", "case_insensitive"]
+    },
+    "/v1/web_fetch": {
+      "struct": "WebFetchRequest",
+      "required": ["url"],
+      "optional": ["method", "headers", "body"]
+    },
+    "/v1/web_search": {
+      "struct": "WebSearchRequest",
+      "required": ["query"],
+      "optional": ["max_results"]
+    }
+  }
+}
