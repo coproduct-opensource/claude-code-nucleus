@@ -69,6 +69,58 @@ jobs:
             || echo "note: the opt-in settings file documents the list in prose, not verbatim"
           echo "OK: the published list is the derived one"
 
+      # The status line renders on every assistant message and on a 3s timer, so
+      # two things must hold that unit tests cannot see: it must never reach the
+      # node (a bar that boots a microVM to draw itself is a disaster), and it
+      # must survive having no journal at all.
+      - name: --statusline is cheap, offline, and never boots a pod
+        run: |
+          set -euo pipefail
+          cargo build --release -p ccn-mcp
+          mcp=$(pwd)/target/release/ccn-mcp
+
+          # A `nucleus` on PATH that files a complaint if anything calls it.
+          fake=$(mktemp -d)
+          sentinel="$fake/was-called"
+          printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$sentinel" > "$fake/nucleus"
+          chmod +x "$fake/nucleus"
+
+          export CCN_JOURNAL="$fake/journal.jsonl"
+          export PATH="$fake:$PATH"
+
+          # No journal, no transport: one quiet row, exit 0.
+          out=$(echo '{}' | env -u NUCLEUS_PROXY_URL -u NUCLEUS_POD_SOCK NO_COLOR=1 "$mcp" --statusline)
+          echo "$out"
+          case "$out" in
+            *"gate on"*) ;;
+            *) echo "FAIL: an empty journal should still say the gate is on" >&2; exit 1 ;;
+          esac
+
+          if [ -e "$sentinel" ]; then
+            echo "FAIL: --statusline invoked nucleus; it must never reach the node" >&2
+            exit 1
+          fi
+
+          # A refusal must survive with its reason intact.
+          cat > "$CCN_JOURNAL" <<'JOURNAL'
+          {"ts":1,"tool":"read","subject":"a.rs","outcome":"allow","detail":null,"pod":"127.0.0.1:1"}
+          {"ts":2,"tool":"run","subject":"git push","outcome":"refuse","detail":"git_push is never under codegen","pod":"127.0.0.1:1"}
+          JOURNAL
+          sed -i 's/^ *//' "$CCN_JOURNAL"
+
+          out=$(echo '{}' | NO_COLOR=1 "$mcp" --statusline)
+          echo "$out"
+          case "$out" in
+            *"git_push is never under codegen"*) ;;
+            *) echo "FAIL: the refusal reason did not survive to the bar" >&2; exit 1 ;;
+          esac
+
+          if [ -e "$sentinel" ]; then
+            echo "FAIL: --statusline invoked nucleus" >&2; exit 1
+          fi
+
+          echo "OK: the status line reads a file and nothing else"
+
       # `ccn-mcp --check` is this repo's verification of the mediated path, so
       # an unexercised one is a claim. Run it against a stand-in proxy that
       # speaks the real field names, in both directions — the second case is the

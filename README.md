@@ -277,6 +277,57 @@ echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command"
 
 Expect a `deny` naming `mcp__nucleus__run`. If you get anything else, the boundary is not up.
 
+## Seeing the lattice while you work
+
+Claude Code has no way for a plugin to add a pane — the plugin surface is skills,
+agents, hooks, MCP servers, LSP servers, monitors, themes, output styles and workflows, and panes are
+first-party. It does have a **status line**: a command re-run on every assistant message and on a
+timer, whose stdout becomes rows above the footer.
+
+That is the better fit anyway. A diff pane shows a *delta* you review once; information-flow state is
+a **lattice position** — small, monotonic, always true of the session. A gauge, not a document.
+
+`.claude/settings.nucleus.json` turns it on with the gate:
+
+```
+nucleus ● 127.0.0.1:52341 · 14 ok · 1 refused
+  ⚠ untrusted ~ web_fetch docs.rs · ✗ run git push  git_push is never under codegen
+```
+
+The second row appears only when there is something to say; a boundary that is holding and has
+refused nothing prints one quiet line. It exists for one defect: **a refusal scrolls past in a single
+tool result, and from then on nobody can see why the next write keeps failing.** The reason stays on
+the bar until something else refuses.
+
+Three distinctions it is careful about:
+
+- **A refusal is not a fault.** A `403` is the lattice deciding and keeps the dot green; only a
+  `404`/`422`/unreachable — this bridge being wrong — turns it red. Counting them together would
+  train you to ignore both.
+- **A refused fetch does not taint.** It brought nothing in. Reading a denial as taint would punish
+  you for the boundary working.
+- **`~` marks an inference, and it is not the label.** See below.
+
+### What the bar knows, and what it does not
+
+`~` means everything after it is derived, not read. The bridge **cannot** read the session's label:
+`/v1/health` returns counts and deliberately never labels, because it is reachable from inside the
+sandbox and must not become a channel for reading back which invariant a probe just tripped. That
+refusal is correct, and the status line does not work around it.
+
+What it does instead is derive from its own observations — a `web_fetch` the pod *performed* is
+untrusted content entering the session, so integrity has dropped. Sound in the direction that
+matters, since it never claims clean when tainted, and still not the label. A true readout needs
+nucleus to expose one **node-side**, which is a different endpoint from the one that correctly
+refuses.
+
+The bar reads `~/.local/state/ccn/journal.jsonl` (override with `CCN_JOURNAL`), which `ccn-mcp`
+appends to as it forwards calls. **That file is an observation log, not evidence.** The
+authoritative record is the signed `MediationReceipt` the pod ships to the node; nothing reads the
+journal back to decide anything, and `--check` does not consult it. It exists because the receipts
+live inside the microVM's node — on macOS, inside the Lima VM — and a status line that re-renders
+every few seconds cannot make a VM round trip to draw itself.
+
 ## Defence in depth
 
 The `--disallowedTools` argument in step 4 is the second layer:

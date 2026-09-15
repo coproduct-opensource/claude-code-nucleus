@@ -16,8 +16,19 @@
     "",
     "Register the MCP server and restart FIRST -- see the README's Install order.",
     "If a session is ever stranded with no working tool, `!` at the prompt runs a",
-    "command outside the hooks: `! git checkout .claude/settings.json`."
+    "command outside the hooks: `! git checkout .claude/settings.json`.",
+    "",
+    "The statusLine shows where the session sits in the lattice -- the pod, the",
+    "allow/refuse counts, whether egress has tainted it, and the last refusal with",
+    "its reason. refreshInterval is set because the event-driven triggers fire on",
+    "each assistant message, not on each tool call, so a long turn would otherwise",
+    "show a stale bar while the calls it describes are still happening."
   ],
+  "statusLine": {
+    "type": "command",
+    "command": "ccn-mcp --statusline",
+    "refreshInterval": 3
+  },
   "hooks": {
     "PreToolUse": [
       {
