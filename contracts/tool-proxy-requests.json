@@ -15,7 +15,7 @@
     "this file honest."
   ],
   "_nucleus_repo": "https://github.com/coproduct-opensource/nucleus",
-  "_nucleus_commit": "f86d961ec",
+  "_nucleus_commit": "f86d961eca9b63fc9a2d08b45fc96908562aacd0",
   "_nucleus_source": "crates/nucleus-tool-proxy/src/main.rs",
   "routes": {
     "/v1/read": {

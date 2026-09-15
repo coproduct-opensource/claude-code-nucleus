@@ -49,7 +49,6 @@ This design inverts it. **The agent stays on the host; every effect moves.** Wha
   mediation receipt records who decided, what they decided, and the hash of the Article 12 record.
 - Taint is tracked across calls. A `web_fetch` marks the session, and a later privileged write is
   refused by ancestry rather than by a classifier guessing at strings.
-- A subagent gets its own pod, so its taint does not flow into the parent.
 
 And what you do not get, stated plainly: **the model's context is not inside the boundary.** The
 prompt, the transcript, and everything Claude has read stay on the host. This design contains
@@ -77,6 +76,8 @@ Three tests are the falsifiers, and each fails loudly rather than subtly:
 | `every_builtin_has_a_disposition_and_none_is_an_allow` | a tool silently permitted |
 | `an_unknown_tool_is_denied_not_allowed` | the fail-closed default regressing to fail-open |
 | `every_mediated_target_is_actually_served` | the gate redirecting to a tool the server does not serve (a deadlock, not a denial) |
+| `nothing_is_mediated_to_a_route_only_some_pods_mount` | the same deadlock one repo out — a route the *pod* does not mount, which is a 404 the model cannot act on |
+| `every_denial_says_what_to_do_instead_or_what_would_enable_it` | a refusal too terse to act on |
 
 ## Install
 
@@ -170,6 +171,12 @@ Named here rather than discovered later:
 - **Background shells are refused, not mediated.** `BashOutput`/`KillShell` outlive a single call, so
   their output cannot be bound to one receipt. Refusing is the honest answer until the proxy models
   a stream.
+- **Subagents are refused, not mediated.** A subagent ought to be a sub-pod with its own flow state,
+  and `POST /v1/pod/create` exists — but it is mounted only on an orchestrator pod (a spec labelled
+  `enable_pod_mgmt`), its body is a whole `PodSpec` rather than a prompt, and it needs `manage_pods`
+  above `never`, which `codegen` does not grant. Mediating to it redirected the model into a 404. The
+  denial names all three conditions; `Agent`/`Task` work again if nucleus makes the route
+  unconditional or this bridge learns to require an orchestrator pod.
 - **Receipts are passed through, not verified here.** Verification is
   [`nucleus-verifier`](https://github.com/coproduct-opensource/nucleus)'s job; this bridge would only
   be marking its own homework.

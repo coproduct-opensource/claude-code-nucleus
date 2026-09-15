@@ -20,6 +20,20 @@ repo=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['_nucleus
 commit=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['_nucleus_commit'])" "$contract")
 source_path=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['_nucleus_source'])" "$contract")
 
+# Fetching one commit by hash needs the full 40 characters. An abbreviation is
+# not a ref, and git reports it as `couldn't find remote ref`, which reads like
+# the commit is gone rather than like the hash is short.
+case "$commit" in
+  [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]\
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]\
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]\
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+  *)
+    echo "_nucleus_commit must be a full 40-character hash; got '$commit'" >&2
+    exit 1
+    ;;
+esac
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 

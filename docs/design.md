@@ -17,7 +17,7 @@ people solving different problems. Their *routes* line up almost exactly:
 | `Grep` | `POST /v1/grep` |
 | `WebFetch` | `POST /v1/web_fetch` |
 | `WebSearch` | `POST /v1/web_search` |
-| `Agent`, `Task` | `POST /v1/pod/create` |
+| `Agent`, `Task` | `POST /v1/pod/create` — *conditional; see below* |
 
 That is not a coincidence so much as convergent design: both are enumerations of *the effects a
 coding agent can have on the world*, and there are not many. Nucleus's own
@@ -55,9 +55,32 @@ interesting content is the two places it is not a bijection:
   collapse is forced: the pod owns the file, so an edit computed on the host would be a write the
   lattice never inspected. The cost is real (`Edit` becomes read-then-write) and it is the correct
   trade.
-- **Not total on the right.** `TodoWrite`, `BashOutput` and `KillShell` have no image. Rather than
-  inventing routes, the map sends them to `Denied` *with a reason*, which keeps the gap legible
-  instead of letting it read as an oversight.
+- **Not total on the right.** `TodoWrite`, `BashOutput`, `KillShell` and `Agent`/`Task` have no
+  image. Rather than inventing routes, the map sends them to `Denied` *with a reason*, which keeps
+  the gap legible instead of letting it read as an oversight.
+
+### A route that exists is not a route that is served
+
+`Agent`/`Task` is the case that taught this, and it is worth its own heading because the failure is
+subtle. `POST /v1/pod/create` is a real route in the proxy's source, so mediating to it looks
+correct from here, and `every_mediated_target_is_actually_served` passes: the gate's target and the
+server's advertisement agree. What neither can see is that the route is mounted **conditionally** —
+only when the proxy holds a node client, which it does only on a pod whose spec is labelled
+`enable_pod_mgmt`. On every other pod the route 404s.
+
+So the gate denied the built-in and redirected the model to a tool that did not answer: the
+deadlock the map exists to prevent, occurring one repository further out than the test can reach.
+Two more walls stood behind that one — the route's body is `{spec_yaml, reason}`, a whole PodSpec
+rather than a task prompt, and it checks `manage_pods >= LowRisk`, which `codegen` sets to `never`.
+
+The rule that follows, and the test that holds it (`nothing_is_mediated_to_a_route_only_some_pods_mount`):
+
+> **Mediate only to a route every pod serves.** Anything conditional is `Denied` with the condition
+> named, so the gap is a sentence the model can read rather than a status code it cannot act on.
+
+This is the same asymmetry as `Denied` versus `Mediated` one level up. A denial that names its
+condition is information; a 404 is not. The capability is lost either way — stating why is the only
+part this repo controls.
 
 ## Totality is the security property
 
