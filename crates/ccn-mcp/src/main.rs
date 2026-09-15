@@ -19,6 +19,8 @@
 
 mod check;
 mod discover;
+mod journal;
+mod statusline;
 mod translate;
 mod transport;
 
@@ -55,6 +57,12 @@ async fn main() {
     // the mediated path down and leave the model with nothing but denials.
     if std::env::args().skip(1).any(|a| a == "--check") {
         std::process::exit(check::run().await);
+    }
+    // `--statusline` renders the journal and exits. It reaches no pod and reads
+    // no policy: Claude Code re-runs it on every assistant message and on a
+    // timer, so it has to cost a file read and nothing more.
+    if std::env::args().skip(1).any(|a| a == "--statusline") {
+        std::process::exit(statusline::run());
     }
 
     let transport = resolve_transport();
@@ -274,10 +282,20 @@ async fn call_tool(transport: &Transport, params: &Value) -> Result<Value, Strin
     // bare 422 from the far side into a message naming the field.
     let body = to_proxy_body(name, &args)?;
 
-    let reply = transport
-        .post(route.0, &body)
-        .await
-        .map_err(|e| e.to_string())?;
+    let outcome = transport.post(route.0, &body).await;
+
+    // Note what happened, for the status line. Bookkeeping on the host, not a
+    // mediated effect and not evidence — `journal`'s own docs carry the
+    // argument, and the short version is that the signed receipt is node-side
+    // and nothing reads this back to decide anything.
+    journal::record(&journal::Entry {
+        tool: name.to_string(),
+        subject: journal::subject_of(name, &args),
+        outcome: observed(&outcome),
+        pod: transport.label(),
+    });
+
+    let reply = outcome.map_err(|e| e.to_string())?;
 
     // Handed back verbatim. The reply carries the result and nothing else — the
     // receipt is not in it, and never was: a Firecracker guest cannot reach the
@@ -289,6 +307,35 @@ async fn call_tool(transport: &Transport, params: &Value) -> Result<Value, Strin
         "content": [{ "type": "text", "text": serde_json::to_string_pretty(&reply).unwrap_or_default() }],
         "isError": false
     }))
+}
+
+/// Which of the two kinds of "no" this was.
+///
+/// The same split `--check` makes, and for the same reason: a refusal is the
+/// lattice deciding and a 4xx about the *shape* of the call is this bridge being
+/// wrong. Showing them as one number on a status line would train the user to
+/// ignore both.
+fn observed(outcome: &Result<Value, TransportError>) -> journal::Outcome {
+    match outcome {
+        Ok(_) => journal::Outcome::Allowed,
+        Err(TransportError::Status { status, body }) if *status == 403 || *status == 409 => {
+            journal::Outcome::Refused(reason_from(body))
+        }
+        Err(e) => journal::Outcome::Failed(e.to_string()),
+    }
+}
+
+/// The proxy's error bodies are JSON carrying a reason; fall back to the raw
+/// text so a refusal never renders as an empty explanation.
+fn reason_from(body: &str) -> String {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| {
+            ["reason", "error", "message", "detail"]
+                .iter()
+                .find_map(|k| v.get(*k).and_then(Value::as_str).map(str::to_string))
+        })
+        .unwrap_or_else(|| body.trim().to_string())
 }
 
 /// A tool-level error: visible to the model, and marked so it cannot be mistaken

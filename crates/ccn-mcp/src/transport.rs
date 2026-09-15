@@ -103,6 +103,24 @@ impl Transport {
         }
     }
 
+    /// The pod in as few characters as name it.
+    ///
+    /// [`Self::describe`] is written for `--check`, where a sentence about the
+    /// trust posture is worth its width. A status line has about eighty columns
+    /// for everything, so it gets the authority and nothing else.
+    pub fn label(&self) -> String {
+        match self {
+            Transport::Unix(p) => p
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| p.display().to_string()),
+            Transport::Http { base, .. } => base
+                .trim_start_matches("http://")
+                .trim_start_matches("https://")
+                .to_string(),
+        }
+    }
+
     /// How this transport was chosen, for the check's first line and for the
     /// stderr note when a pod was discovered rather than configured.
     pub fn describe(&self) -> String {
@@ -232,6 +250,24 @@ mod tests {
         assert_eq!(non_empty("CCN_TEST_BLANK"), None);
         std::env::set_var("CCN_TEST_SET", "/run/x.sock");
         assert_eq!(non_empty("CCN_TEST_SET"), Some("/run/x.sock".into()));
+    }
+
+    /// The status line has eighty columns for the whole of itself. A transport
+    /// description that explains the trust posture belongs in `--check`.
+    #[test]
+    fn the_label_is_the_authority_and_nothing_else() {
+        assert_eq!(
+            Transport::Http {
+                base: "http://127.0.0.1:52341".into(),
+                token: None
+            }
+            .label(),
+            "127.0.0.1:52341"
+        );
+        assert_eq!(
+            Transport::Unix(PathBuf::from("/run/nucleus/pod.sock")).label(),
+            "pod.sock"
+        );
     }
 
     /// https is refused rather than silently downgraded — a bridge that accepts
