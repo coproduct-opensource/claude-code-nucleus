@@ -184,6 +184,19 @@ pub fn unknown_tool_disposition(_tool_name: &str) -> Disposition {
     }
 }
 
+/// The `--disallowedTools` argument recommended alongside the gate.
+///
+/// Derived from [`BUILTIN_TOOLS`] rather than written out, because a
+/// hand-maintained copy of a list is exactly the thing that goes stale — the
+/// README's was missing `Task`, one of the two names for the tool it did list.
+///
+/// This list is *not* the boundary and cannot be: a tool added or renamed after
+/// it was written is not on it, which is why the gate is a default rather than a
+/// list. It is defence in depth, and it costs nothing to keep complete.
+pub fn disallowed_tools_arg() -> String {
+    BUILTIN_TOOLS.join(",")
+}
+
 /// The MCP tools this bridge serves, in the order they are advertised.
 ///
 /// Derived from the map rather than written twice, so the server cannot drift
@@ -296,6 +309,20 @@ mod tests {
             reason.contains("enable_pod_mgmt") && reason.contains("manage_pods"),
             "the subagent denial must name both conditions: {reason}"
         );
+    }
+
+    /// The README prints this list for people to paste. Derived, so it cannot
+    /// drift from the map; checked in CI against the README, so the README
+    /// cannot drift from it either.
+    #[test]
+    fn the_disallowed_tools_list_covers_every_builtin() {
+        let arg = disallowed_tools_arg();
+        for name in BUILTIN_TOOLS {
+            assert!(
+                arg.split(',').any(|t| t == *name),
+                "{name} is missing from the --disallowedTools list"
+            );
+        }
     }
 
     /// The effects that actually cross the boundary — filesystem, shell,

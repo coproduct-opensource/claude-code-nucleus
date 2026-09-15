@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "The gate, as an OPT-IN settings file rather than as .claude/settings.json.",
+    "",
+    "Two reasons it is not the latter. The gate loads live, in the session that",
+    "writes it, while an MCP server is read once at session start -- so writing",
+    "the gate into the active settings file gives that session the denials",
+    "without the mediated path they redirect to, including the Write needed to",
+    "undo it. And this repo is built with cargo and committed with git, both of",
+    "which are host Bash: under its own gate, the checkout cannot develop itself.",
+    "",
+    "Turn it on for a session that should be mediated:",
+    "",
+    "    claude --settings .claude/settings.nucleus.json \\",
+    "           --disallowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Agent,Task",
+    "",
+    "Register the MCP server and restart FIRST -- see the README's Install order.",
+    "If a session is ever stranded with no working tool, `!` at the prompt runs a",
+    "command outside the hooks: `! git checkout .claude/settings.json`."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "ccn-gate", "timeout": 10 }]
+      }
+    ]
+  }
+}
