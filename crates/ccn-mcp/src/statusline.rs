@@ -47,13 +47,17 @@ const WINDOW: usize = 200;
 /// is a budget rather than a measurement.
 const WIDTH: usize = 80;
 
-/// What a taint source and a refusal each get of the second row.
+/// What a taint source gets of the second row. The reason is not fixed: it takes
+/// whatever the rest of the row leaves, because real refusals are long.
 ///
-/// The reason gets the larger share on purpose. "resolves outside the sandbox
-/// root" cut to "resolves outside the sand…" is the half that mattered, thrown
-/// away to keep a path nobody needed in full.
+/// Measured against a live pod, nucleus's refusals arrive with a layer prefix
+/// before the part that says what happened —
+/// `ifc denied: discharge denied: InScopeWithTask: operation WebFetch is not...`.
+/// A fixed half-row budget spent all of it on the prefix and rendered
+/// `ifc denied: discharge denied: InScopeWi...`, which names the layer and not
+/// the cause. The prefix is worth keeping (it says *which* layer refused), so
+/// the row gives the reason everything it has instead.
 const SUBJECT_BUDGET: usize = WIDTH / 4;
-const REASON_BUDGET: usize = WIDTH / 2;
 
 pub fn run() -> i32 {
     // Claude Code writes the session JSON to stdin. Nothing here needs it, but
@@ -203,13 +207,20 @@ fn alerts(entries: &[Entry], p: &Palette) -> Option<String> {
         } else {
             format!(" {subject}")
         };
+        // Whatever the row has left: two leading spaces, the separator when a
+        // taint part precedes this one, and the width of tool + subject.
+        let used = 2
+            + parts.iter().map(|part| visible(part) + 3).sum::<usize>()
+            + last.tool.chars().count()
+            + subject.chars().count()
+            + 3;
         parts.push(format!(
             "{}✗ {}{subject}{} {}{}{}",
             p.red,
             last.tool,
             p.reset,
             p.dim,
-            short(why, REASON_BUDGET),
+            short(why, WIDTH.saturating_sub(used).max(24)),
             p.reset
         ));
     }
@@ -232,6 +243,24 @@ fn taint_source(entries: &[Entry]) -> Option<&Entry> {
     entries.iter().rev().find(|e| {
         e.outcome == Outcome::Allowed && matches!(e.tool.as_str(), "web_fetch" | "web_search")
     })
+}
+
+/// Width as a terminal renders it: escape sequences occupy no columns.
+fn visible(s: &str) -> usize {
+    let mut n = 0;
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            for c in chars.by_ref() {
+                if ('@'..='~').contains(&c) {
+                    break;
+                }
+            }
+        } else {
+            n += 1;
+        }
+    }
+    n
 }
 
 /// Squeeze a subject into what is left of the row.
@@ -410,6 +439,18 @@ mod tests {
             rows[1].contains("resolves outside the sandbox root"),
             "the reason was cut: {}",
             rows[1]
+        );
+        // The real shape from a live pod: a layer prefix before the cause. Both
+        // halves have to survive, or the row names the layer and not the reason.
+        let live = plain(&[e(
+            "web_fetch",
+            "https://example.com",
+            Outcome::Refused("ifc denied: discharge denied: InScopeWithTask".into()),
+        )]);
+        assert!(
+            live[1].contains("InScopeWithTask"),
+            "the cause was cut off by the layer prefix: {}",
+            live[1]
         );
         assert!(
             rows[1].contains("/etc/shadow"),
