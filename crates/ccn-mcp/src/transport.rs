@@ -30,6 +30,13 @@ pub enum TransportError {
     Protocol(String),
     #[error("no transport configured: set NUCLEUS_POD_SOCK or NUCLEUS_PROXY_URL")]
     Unconfigured,
+    /// Neither variable was set and asking the node for a pod did not work
+    /// either. Distinct from `Protocol`, which is about a *pod's* reply — there
+    /// is no pod here yet, and saying "the pod's reply was not the shape this
+    /// bridge expects" about a node that is not running sends the reader to the
+    /// wrong place.
+    #[error("could not find a nucleus pod: {0}")]
+    Discovery(String),
 }
 
 #[derive(Debug, Clone)]
@@ -46,13 +53,13 @@ impl Transport {
     /// a deployment ends up authenticating with a bearer token it did not know
     /// it was still using.
     pub fn from_env() -> Result<Self, TransportError> {
-        if let Some(sock) = std::env::var_os("NUCLEUS_POD_SOCK") {
+        if let Some(sock) = non_empty("NUCLEUS_POD_SOCK") {
             return Ok(Transport::Unix(PathBuf::from(sock)));
         }
-        if let Ok(base) = std::env::var("NUCLEUS_PROXY_URL") {
+        if let Some(base) = non_empty("NUCLEUS_PROXY_URL") {
             return Ok(Transport::Http {
                 base: base.trim_end_matches('/').to_string(),
-                token: std::env::var("NUCLEUS_SESSION_TOKEN").ok(),
+                token: non_empty("NUCLEUS_SESSION_TOKEN"),
             });
         }
         Err(TransportError::Unconfigured)
@@ -66,19 +73,58 @@ impl Transport {
     ) -> Result<serde_json::Value, TransportError> {
         let payload =
             serde_json::to_vec(body).map_err(|e| TransportError::Protocol(e.to_string()))?;
+        self.request("POST", route, &payload).await
+    }
+
+    /// GET `route`. Only `/v1/health` needs this, and only to answer "is the pod
+    /// serving yet" — which is a different question from "did my call work", and
+    /// the one a freshly created pod makes you ask.
+    pub async fn get(&self, route: &str) -> Result<serde_json::Value, TransportError> {
+        self.request("GET", route, &[]).await
+    }
+
+    async fn request(
+        &self,
+        method: &str,
+        route: &str,
+        payload: &[u8],
+    ) -> Result<serde_json::Value, TransportError> {
         match self {
             Transport::Unix(path) => {
                 let stream = tokio::net::UnixStream::connect(path).await?;
-                request_over(stream, "localhost", route, &payload, None).await
+                request_over(stream, method, "localhost", route, payload, None).await
             }
             Transport::Http { base, token } => {
                 let (host, port, path_prefix) = split_base(base)?;
                 let stream = tokio::net::TcpStream::connect((host.as_str(), port)).await?;
                 let full = format!("{path_prefix}{route}");
-                request_over(stream, &host, &full, &payload, token.as_deref()).await
+                request_over(stream, method, &host, &full, payload, token.as_deref()).await
             }
         }
     }
+
+    /// How this transport was chosen, for the check's first line and for the
+    /// stderr note when a pod was discovered rather than configured.
+    pub fn describe(&self) -> String {
+        match self {
+            Transport::Unix(p) => format!("unix socket {}", p.display()),
+            Transport::Http { base, token } => match token {
+                Some(_) => format!("{base} (bearer token)"),
+                None => format!("{base} (no token — the node signs this hop)"),
+            },
+        }
+    }
+}
+
+/// A variable that is set to the empty string is not configuration.
+///
+/// `.mcp.json` env blocks and shell exports both produce set-but-empty values
+/// routinely, and treating one as an address gave `Transport::Unix("")` — which
+/// fails at connect time as `Invalid argument (os error 22)`, a message that
+/// says nothing about the cause. Unset and empty now mean the same thing, which
+/// is also what makes `NUCLEUS_POD_SOCK=` a working way to force discovery.
+fn non_empty(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
 
 /// `http://host:port/prefix` split into its parts. Only plaintext is accepted:
@@ -104,10 +150,11 @@ fn split_base(base: &str) -> Result<(String, u16, String), TransportError> {
     Ok((host, port, prefix.to_string()))
 }
 
-/// One HTTP/1.1 POST, read to completion, `Connection: close` so the reply ends
-/// at EOF and no chunked/keep-alive framing has to be parsed.
+/// One HTTP/1.1 request, read to completion, `Connection: close` so the reply
+/// ends at EOF and no chunked/keep-alive framing has to be parsed.
 async fn request_over<S>(
     mut stream: S,
+    method: &str,
     host: &str,
     path: &str,
     payload: &[u8],
@@ -121,7 +168,7 @@ where
         None => String::new(),
     };
     let head = format!(
-        "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n\
+        "{method} {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n\
          Content-Length: {}\r\n{auth}Connection: close\r\n\r\n",
         payload.len()
     );
@@ -171,6 +218,20 @@ mod tests {
         );
         let (h, p, pre) = split_base("http://node:9000").unwrap();
         assert_eq!((h.as_str(), p, pre.as_str()), ("node", 9000, ""));
+    }
+
+    /// A set-but-empty variable used to configure an empty socket path, which
+    /// failed at connect with `Invalid argument` and no hint as to why. Both
+    /// `.mcp.json` env blocks and shell exports produce these.
+    #[test]
+    fn a_variable_set_to_the_empty_string_is_not_configuration() {
+        assert_eq!(non_empty("CCN_DEFINITELY_UNSET_VARIABLE"), None);
+        std::env::set_var("CCN_TEST_EMPTY", "");
+        assert_eq!(non_empty("CCN_TEST_EMPTY"), None);
+        std::env::set_var("CCN_TEST_BLANK", "   ");
+        assert_eq!(non_empty("CCN_TEST_BLANK"), None);
+        std::env::set_var("CCN_TEST_SET", "/run/x.sock");
+        assert_eq!(non_empty("CCN_TEST_SET"), Some("/run/x.sock".into()));
     }
 
     /// https is refused rather than silently downgraded — a bridge that accepts

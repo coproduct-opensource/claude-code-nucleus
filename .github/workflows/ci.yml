@@ -69,6 +69,47 @@ jobs:
             || echo "note: the opt-in settings file documents the list in prose, not verbatim"
           echo "OK: the published list is the derived one"
 
+      # `ccn-mcp --check` is this repo's verification of the mediated path, so
+      # an unexercised one is a claim. Run it against a stand-in proxy that
+      # speaks the real field names, in both directions — the second case is the
+      # one worth having, because a checker that passes while containment is not
+      # holding is worse than no checker.
+      - name: --check passes a sound path and fails an unsound one
+        run: |
+          set -euo pipefail
+          cargo build --release -p ccn-mcp
+          mcp=./target/release/ccn-mcp
+
+          probe() {
+            python3 ci/mock-proxy.py "$1" 8799 & pid=$!
+            trap 'kill $pid 2>/dev/null || true' EXIT
+            for _ in $(seq 1 50); do
+              if curl -sf http://127.0.0.1:8799/v1/health >/dev/null 2>&1; then break; fi
+              sleep 0.1
+            done
+
+            set +e
+            NUCLEUS_PROXY_URL=http://127.0.0.1:8799 "$mcp" --check
+            got=$?
+            set -e
+
+            kill $pid 2>/dev/null || true
+            trap - EXIT
+            wait $pid 2>/dev/null || true
+
+            if [ "$got" != "$2" ]; then
+              echo "FAIL: --check against the '$1' proxy exited $got, expected $2" >&2
+              exit 1
+            fi
+          }
+
+          # A pod that refuses the escape probe: the path is sound.
+          probe strict 0
+          # A pod that SERVES /etc/shadow: three green steps, and it must still fail.
+          probe broken 1
+
+          echo "OK: --check distinguishes a sound mediated path from an unsound one"
+
   contract:
     name: the proxy still deserialises what we send
     runs-on: ubuntu-latest
