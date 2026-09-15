@@ -6,7 +6,7 @@ because the shape is what makes the security property checkable rather than mere
 ## The near-isomorphism nobody planned
 
 Claude Code's built-in tools and nucleus's pod-local tool-proxy routes were designed years apart by
-people solving different problems. They line up almost exactly:
+people solving different problems. Their *routes* line up almost exactly:
 
 | Claude Code built-in | `nucleus-tool-proxy` route |
 |---|---|
@@ -17,22 +17,70 @@ people solving different problems. They line up almost exactly:
 | `Grep` | `POST /v1/grep` |
 | `WebFetch` | `POST /v1/web_fetch` |
 | `WebSearch` | `POST /v1/web_search` |
-| `Agent`, `Task` | `POST /v1/pod/create` |
+| `Agent`, `Task` | `POST /v1/pod/create` — *conditional; see below* |
 
 That is not a coincidence so much as convergent design: both are enumerations of *the effects a
 coding agent can have on the world*, and there are not many. Nucleus's own
 `DISALLOWED_BUILTIN_TOOLS` constant lists the same set from the other direction.
 
-The consequence is that the bridge is not an adapter with special cases. It is a **map between two
-alphabets of effects**, and the interesting content is the two places it is not a bijection:
+### Their bodies do not line up at all
+
+The alignment above is real and it is only about routes, which is a distinction worth stating
+because the bridge shipped without it and every mediated call failed. `Read` sends `file_path`;
+`/v1/read` deserialises `path` and answers `422` to anything else. `Write` sends `content` against
+`contents`; `Glob` sends `path` against `directory`. `Bash` sends a command *string* and `/v1/run`
+takes an argument *vector*, because there is no shell inside the pod to turn one into the other —
+and nucleus's default command policy blocks `sh -c`, so there is no wrapping it either.
+
+So `ccn-mcp`'s `translate` module is the part of the bridge that is genuinely an adapter rather than
+a map. Two consequences shape it:
+
+- **The vocabulary difference is hidden; the semantic one is not.** Renaming `file_path` to `path`
+  costs the model nothing and keeps the gate's redirect actionable with the arguments already in
+  hand. But splitting `ls | wc -l` on whitespace would run `ls` against the literal arguments `|`
+  and `wc`, report success, and have done something else — so shell syntax is **refused with the
+  reason and the tool that does express it**, and `run`'s own description says there is no shell.
+- **A dependency on another repo's field names is written down.** `contracts/tool-proxy-requests.json`
+  records the proxy's `Deserialize` structs at a pinned commit. A unit test asserts the translation
+  emits only fields those structs accept — offline, no pod — and a CI job re-derives the same tables
+  from nucleus's source, so a rename there fails a build here.
+
+This is the one place the functor leaks, and the leak is worth naming rather than smoothing over:
+the *objects* correspond, the *morphisms* had to be written by hand.
+
+At the level of names, then, the bridge is a **map between two alphabets of effects**, and the
+interesting content is the two places it is not a bijection:
 
 - **Three-to-one on the left.** `Write`, `Edit` and `NotebookEdit` all land on `/v1/write`. The
   collapse is forced: the pod owns the file, so an edit computed on the host would be a write the
   lattice never inspected. The cost is real (`Edit` becomes read-then-write) and it is the correct
   trade.
-- **Not total on the right.** `TodoWrite`, `BashOutput` and `KillShell` have no image. Rather than
-  inventing routes, the map sends them to `Denied` *with a reason*, which keeps the gap legible
-  instead of letting it read as an oversight.
+- **Not total on the right.** `TodoWrite`, `BashOutput`, `KillShell` and `Agent`/`Task` have no
+  image. Rather than inventing routes, the map sends them to `Denied` *with a reason*, which keeps
+  the gap legible instead of letting it read as an oversight.
+
+### A route that exists is not a route that is served
+
+`Agent`/`Task` is the case that taught this, and it is worth its own heading because the failure is
+subtle. `POST /v1/pod/create` is a real route in the proxy's source, so mediating to it looks
+correct from here, and `every_mediated_target_is_actually_served` passes: the gate's target and the
+server's advertisement agree. What neither can see is that the route is mounted **conditionally** —
+only when the proxy holds a node client, which it does only on a pod whose spec is labelled
+`enable_pod_mgmt`. On every other pod the route 404s.
+
+So the gate denied the built-in and redirected the model to a tool that did not answer: the
+deadlock the map exists to prevent, occurring one repository further out than the test can reach.
+Two more walls stood behind that one — the route's body is `{spec_yaml, reason}`, a whole PodSpec
+rather than a task prompt, and it checks `manage_pods >= LowRisk`, which `codegen` sets to `never`.
+
+The rule that follows, and the test that holds it (`nothing_is_mediated_to_a_route_only_some_pods_mount`):
+
+> **Mediate only to a route every pod serves.** Anything conditional is `Denied` with the condition
+> named, so the gap is a sentence the model can read rather than a status code it cannot act on.
+
+This is the same asymmetry as `Denied` versus `Mediated` one level up. A denial that names its
+condition is information; a 404 is not. The capability is lost either way — stating why is the only
+part this repo controls.
 
 ## Totality is the security property
 

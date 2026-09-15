@@ -17,11 +17,13 @@
 //! The one judgement it does make is fail-closed: a transport error becomes a
 //! tool error the model can see, never a synthesised success.
 
+mod translate;
 mod transport;
 
 use ccn_core::mediated_tools;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use translate::to_proxy_body;
 use transport::Transport;
 
 /// The MCP protocol revision this server implements.
@@ -109,14 +111,15 @@ fn tools_list() -> Value {
 
 fn describe(name: &str, route: &str) -> String {
     let what = match name {
-        "run" => "Run a shell command inside the pod",
+        "run" => "Run one program with arguments inside the pod (no shell)",
         "read" => "Read a file inside the pod",
         "write" => "Write a file inside the pod",
         "glob" => "Match files by glob inside the pod",
         "grep" => "Search file contents inside the pod",
-        "web_fetch" => "Fetch a URL through the pod's mediated egress (taints the session)",
+        "web_fetch" => {
+            "Fetch a URL through the pod's mediated egress, unsummarised (taints the session)"
+        }
         "web_search" => "Search the web through the pod's mediated egress (taints the session)",
-        "subagent" => "Start a child pod for a delegated task, with its own flow state",
         _ => "Mediated effect",
     };
     format!("{what}. Enforced by nucleus at {route}; returns a signed mediation receipt.")
@@ -126,26 +129,58 @@ fn describe(name: &str, route: &str) -> String {
 /// not have to learn a second vocabulary when the gate redirects it. The proxy
 /// validates properly on the far side; these exist to keep the call shapes
 /// familiar, and are permissive on purpose rather than a second validator.
+///
+/// `translate::to_proxy_body` is what makes the familiar names true — the routes
+/// spell most of them differently. Two things are deliberately *not* mirrored,
+/// because the pod cannot honour them and advertising them would be a promise
+/// this bridge breaks on the far side:
+///
+/// * `run` takes a command string but there is no shell to interpret it, so the
+///   description says so and the translation refuses shell syntax outright.
+/// * `read` has no `offset`/`limit`: `/v1/read` returns the whole file.
 fn schema_for(name: &str) -> Value {
     let (props, required): (Value, Vec<&str>) = match name {
         "run" => (
             json!({
-                "command": { "type": "string", "description": "Shell command to run" },
-                "timeout_ms": { "type": "integer", "description": "Optional timeout in milliseconds" }
+                "command": {
+                    "type": "string",
+                    "description": "One program and its arguments, e.g. `cargo test --workspace`. \
+                                    There is NO SHELL inside the pod: pipes, `&&`, `;`, redirection, \
+                                    `$VAR`, backticks and unquoted globs are refused with an \
+                                    explanation rather than passed through as literal arguments. \
+                                    Quoting and backslash escapes work as usual. To combine commands, \
+                                    make one call each; to expand a pattern, call `glob` first."
+                },
+                "directory": {
+                    "type": "string",
+                    "description": "Working directory, relative to the pod root. Use this instead of `cd`."
+                },
+                "stdin": { "type": "string", "description": "Optional input for the program's stdin" },
+                "timeout_ms": {
+                    "type": "integer",
+                    "description": "Optional timeout in milliseconds, forwarded to the pod as seconds"
+                }
             }),
             vec!["command"],
         ),
         "read" => (
             json!({
-                "file_path": { "type": "string", "description": "Absolute path inside the pod" },
-                "offset": { "type": "integer" },
-                "limit": { "type": "integer" }
+                "file_path": {
+                    "type": "string",
+                    "description": "Path inside the pod. Absolute paths under the pod root and paths \
+                                    relative to it both resolve; anything outside is refused. Returns \
+                                    the whole file."
+                }
             }),
             vec!["file_path"],
         ),
         "write" => (
             json!({
-                "file_path": { "type": "string", "description": "Absolute path inside the pod" },
+                "file_path": {
+                    "type": "string",
+                    "description": "Path inside the pod. The parent directory must already exist — \
+                                    create it with `run mkdir -p <dir>` first."
+                },
                 "content": { "type": "string", "description": "Full file contents" }
             }),
             vec!["file_path", "content"],
@@ -153,7 +188,8 @@ fn schema_for(name: &str) -> Value {
         "glob" => (
             json!({
                 "pattern": { "type": "string" },
-                "path": { "type": "string", "description": "Directory to search from" }
+                "path": { "type": "string", "description": "Directory to search from, relative to the pod root" },
+                "max_results": { "type": "integer" }
             }),
             vec!["pattern"],
         ),
@@ -167,18 +203,19 @@ fn schema_for(name: &str) -> Value {
         ),
         "web_fetch" => (
             json!({
-                "url": { "type": "string" },
-                "prompt": { "type": "string" }
+                "url": {
+                    "type": "string",
+                    "description": "Returns the response itself; the pod does not summarise it"
+                }
             }),
             vec!["url"],
         ),
-        "web_search" => (json!({ "query": { "type": "string" } }), vec!["query"]),
-        "subagent" => (
+        "web_search" => (
             json!({
-                "prompt": { "type": "string", "description": "Task for the child pod" },
-                "description": { "type": "string" }
+                "query": { "type": "string" },
+                "max_results": { "type": "integer" }
             }),
-            vec!["prompt"],
+            vec!["query"],
         ),
         _ => (json!({}), vec![]),
     };
@@ -201,8 +238,14 @@ async fn call_tool(transport: &Transport, params: &Value) -> Result<Value, Strin
         // is: this bridge serves a closed set.
         .ok_or_else(|| format!("`{name}` is not a tool this bridge serves"))?;
 
+    // The built-ins' vocabulary is not the routes' vocabulary. Translating here
+    // rather than at the schema keeps the redirect the gate prints actionable
+    // with the arguments the model already has — and turns what used to be a
+    // bare 422 from the far side into a message naming the field.
+    let body = to_proxy_body(name, &args)?;
+
     let reply = transport
-        .post(route.0, &args)
+        .post(route.0, &body)
         .await
         .map_err(|e| e.to_string())?;
 
