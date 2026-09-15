@@ -53,6 +53,22 @@ jobs:
 
           echo "OK: the gate refused every unmediated path"
 
+      # The README tells people to paste a --disallowedTools list. A stale copy
+      # of it is how `Task` went missing from the published one while the map
+      # denied it correctly. Derive, then check the docs against the source.
+      - name: The README's --disallowedTools list is the derived one
+        run: |
+          set -euo pipefail
+          want=$(cargo run --quiet --example disallowed_tools -p ccn-core)
+          grep -qF -- "$want" README.md || {
+            echo "FAIL: README's --disallowedTools list is not ccn_core::disallowed_tools_arg()" >&2
+            echo "expected: $want" >&2
+            exit 1
+          }
+          grep -qF -- "$want" .claude/settings.nucleus.json 2>/dev/null \
+            || echo "note: the opt-in settings file documents the list in prose, not verbatim"
+          echo "OK: the published list is the derived one"
+
   contract:
     name: the proxy still deserialises what we send
     runs-on: ubuntu-latest

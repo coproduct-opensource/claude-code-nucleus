@@ -84,11 +84,18 @@ Three tests are the falsifiers, and each fails loudly rather than subtly:
 Requires a running nucleus pod. `nucleus setup --install-deps` provisions one on Apple Silicon
 (M3+, macOS 15+); this repo does not provision it.
 
+**The order below is load-bearing.** A `PreToolUse` hook takes effect in the session that writes it,
+immediately. An MCP server is read once, at session start. So installing the gate before the
+mediated path exists gives that session every denial and none of the replacements — including the
+`Write` needed to undo it. Register the server, restart, *check*, and only then install the gate.
+
+**1. Build the binaries.**
+
 ```sh
 cargo install --git https://github.com/coproduct-opensource/claude-code-nucleus ccn-gate ccn-mcp
 ```
 
-Register the MCP server (`.mcp.json`, or `claude mcp add`):
+**2. Register the MCP server** (`.mcp.json`, or `claude mcp add`):
 
 ```json
 {
@@ -101,19 +108,38 @@ Register the MCP server (`.mcp.json`, or `claude mcp add`):
 }
 ```
 
-Install the gate (`.claude/settings.json`):
+**3. Restart Claude Code**, and confirm the mediated path is actually there:
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "ccn-gate", "timeout": 10 }] }
-    ]
-  }
-}
+```sh
+claude mcp list          # `nucleus` must be listed and Connected
 ```
 
-Or install the whole thing as a plugin — the manifest in `.claude-plugin/` ships both.
+If it is not, stop here. Installing the gate now is what strands a session.
+
+**4. Turn the gate on**, per session:
+
+```sh
+claude --settings .claude/settings.nucleus.json \
+       --disallowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Agent,Task,TodoWrite,BashOutput,KillShell
+```
+
+`.claude/settings.nucleus.json` ships in this repo and holds nothing but the hook. Or install the
+whole thing as a plugin — the manifest in `.claude-plugin/` ships the gate and the server together,
+so they arrive in the same load and the ordering problem does not arise.
+
+### Opt-in, not `.claude/settings.json`
+
+Putting the hook in `.claude/settings.json` applies it to every session in the directory, which is
+right for a repo the agent should never touch directly and wrong for most others — in particular
+**this one**. `cargo build`, `cargo test` and `git` are all host `Bash`; a contributor who installs
+the gate into this checkout locks themselves out of it. The separate file is the switch.
+
+If a session does end up stranded with no working tool, `!` at the prompt runs a command outside the
+hooks:
+
+```
+! git checkout .claude/settings.json
+```
 
 ### Transport
 
@@ -153,9 +179,18 @@ Expect a `deny` naming `mcp__nucleus__run`. If you get anything else, the bounda
 
 ## Defence in depth
 
-Also pass `--disallowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Agent`.
+The `--disallowedTools` argument in step 4 is the second layer:
+
+```
+Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Agent,Task,TodoWrite,BashOutput,KillShell
+```
+
 That list is *not* the boundary and cannot be — a tool added or renamed after it was written is not
 on it. The gate is the boundary, because it is a default rather than a list. Use both.
+
+It is derived from `BUILTIN_TOOLS` by `ccn_core::disallowed_tools_arg` and checked against this
+README in CI, because a hand-maintained copy of a list is the thing that goes stale: the version
+printed here previously was missing `Task`, one of the two names for the tool it did list.
 
 ## Known gaps
 
