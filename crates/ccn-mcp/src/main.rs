@@ -120,7 +120,6 @@ fn describe(name: &str, route: &str) -> String {
             "Fetch a URL through the pod's mediated egress, unsummarised (taints the session)"
         }
         "web_search" => "Search the web through the pod's mediated egress (taints the session)",
-        "subagent" => "Start a child pod for a delegated task, with its own flow state",
         _ => "Mediated effect",
     };
     format!("{what}. Enforced by nucleus at {route}; returns a signed mediation receipt.")
@@ -217,13 +216,6 @@ fn schema_for(name: &str) -> Value {
                 "max_results": { "type": "integer" }
             }),
             vec!["query"],
-        ),
-        "subagent" => (
-            json!({
-                "prompt": { "type": "string", "description": "Task for the child pod" },
-                "description": { "type": "string" }
-            }),
-            vec!["prompt"],
         ),
         _ => (json!({}), vec![]),
     };

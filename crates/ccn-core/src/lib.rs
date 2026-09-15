@@ -86,9 +86,22 @@ pub const BUILTIN_TOOLS: &[&str] = &[
 
 /// The map. Total over [`BUILTIN_TOOLS`]; fail-closed everywhere else.
 ///
-/// The four `Denied` arms are not an oversight. Each names an effect the pod
-/// cannot express today, and saying so in the reason keeps the gap legible
-/// instead of letting it read as an accident.
+/// The `Denied` arms are not an oversight. Each names an effect the pod cannot
+/// express today, and saying so in the reason keeps the gap legible instead of
+/// letting it read as an accident.
+///
+/// ## A route that exists is not a route that is served
+///
+/// `Mediated` carries a claim this crate cannot check: that the pod on the other
+/// end actually mounts the route. Most of the proxy's routes are unconditional,
+/// so the claim holds for them by inspection. The `pod/*` family is not — it is
+/// mounted only on an orchestrator pod — and mediating to a conditional route
+/// produces the deadlock `every_mediated_target_is_actually_served` exists to
+/// prevent, one repository further out than that test can see.
+///
+/// The rule this map follows, then: **mediate only to a route every pod serves.**
+/// Anything conditional is `Denied` with the condition named, so the gap is a
+/// sentence the model can read rather than a 404 it cannot act on.
 pub fn disposition(tool_name: &str) -> Disposition {
     match tool_name {
         "Bash" => Disposition::Mediated {
@@ -122,11 +135,25 @@ pub fn disposition(tool_name: &str) -> Disposition {
             mcp_tool: "web_search",
             route: Route("/v1/web_search"),
         },
-        // A subagent is a sub-pod, not a thread. Giving it its own pod is what
-        // keeps its taint out of the parent's flow state.
-        "Agent" | "Task" => Disposition::Mediated {
-            mcp_tool: "subagent",
-            route: Route("/v1/pod/create"),
+        // A subagent *should* be a sub-pod rather than a thread: its own pod is
+        // what would keep its taint out of the parent's flow state. It is denied
+        // anyway, because the route that would do it is not there to be called.
+        //
+        // `/v1/pod/create` is mounted only when the proxy holds a node client,
+        // which needs `--enable-pod-mgmt`, which the node passes only when the
+        // pod spec's labels carry `enable_pod_mgmt`. On any other pod the route
+        // 404s. Two further walls stand behind that one: the route's body is
+        // `{spec_yaml, reason}` — a whole PodSpec, not a task prompt — and it
+        // checks `manage_pods >= LowRisk`, which `codegen`, the profile this
+        // bridge is meant for, sets to `never`.
+        //
+        // Mediating it would mean the gate denying the built-in and redirecting
+        // the model to a tool that 404s: a deadlock, which is the single
+        // outcome this map exists to prevent. Denying says the true thing.
+        "Agent" | "Task" => Disposition::Denied {
+            reason: "subagents are not mediated: spawning a child pod needs an orchestrator pod \
+                     (a spec labelled `enable_pod_mgmt`) with `manage_pods` above `never`, and a \
+                     PodSpec rather than a prompt. Do the work in this session instead",
         },
         // Bookkeeping with no effect outside the transcript. Denying it costs
         // the model a scratchpad; mediating it would put the pod on the path of
@@ -209,6 +236,29 @@ mod tests {
         );
     }
 
+    /// The companion to `every_mediated_target_is_actually_served`, for the half
+    /// of the deadlock that lives in the other repository: a route the *pod*
+    /// does not mount is a 404 the model cannot act on, and this repo's tests
+    /// cannot see it. What they can see is the list of conditional routes.
+    ///
+    /// `pod/*` is mounted only on an orchestrator pod (`enable_pod_mgmt`).
+    /// Everything else on the proxy's surface is unconditional. So: nothing may
+    /// be mediated to a `pod/*` route. If nucleus makes one unconditional, or
+    /// this bridge learns to require an orchestrator pod, this test is the place
+    /// that says so.
+    #[test]
+    fn nothing_is_mediated_to_a_route_only_some_pods_mount() {
+        for name in BUILTIN_TOOLS {
+            if let Disposition::Mediated { route, .. } = disposition(name) {
+                assert!(
+                    !route.0.starts_with("/v1/pod/"),
+                    "{name} is mediated to {route}, which a standard pod does not serve — \
+                     the gate would redirect the model into a 404"
+                );
+            }
+        }
+    }
+
     /// The gate and the server must agree. A mediated tool the server does not
     /// advertise is worse than a denial: the model is told to retry into
     /// nothing.
@@ -223,6 +273,29 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A denial the model cannot act on is a dead end with better prose. Every
+    /// reason has to say what would make the effect available, or what to do
+    /// instead — the subagent one is the case that matters, since losing it
+    /// changes how a session is structured.
+    #[test]
+    fn every_denial_says_what_to_do_instead_or_what_would_enable_it() {
+        for name in BUILTIN_TOOLS {
+            if let Disposition::Denied { reason } = disposition(name) {
+                assert!(
+                    reason.len() > 30,
+                    "{name} is denied with a reason too terse to act on: {reason}"
+                );
+            }
+        }
+        let Disposition::Denied { reason } = disposition("Task") else {
+            panic!("Task must be denied while /v1/pod/create is conditional")
+        };
+        assert!(
+            reason.contains("enable_pod_mgmt") && reason.contains("manage_pods"),
+            "the subagent denial must name both conditions: {reason}"
+        );
     }
 
     /// The effects that actually cross the boundary — filesystem, shell,
