@@ -69,6 +69,66 @@ jobs:
             || echo "note: the opt-in settings file documents the list in prose, not verbatim"
           echo "OK: the published list is the derived one"
 
+      # The defect this catches shipped: hooks.json pointed PreToolUse at
+      # ${CLAUDE_PLUGIN_ROOT}/bin/ccn-gate, /bin is gitignored, and a hook whose
+      # command cannot start is a NON-blocking error -- exit 127, a notice, and
+      # the tool call proceeds. Installing the plugin left every built-in running
+      # on the host while the user believed the boundary was up.
+      #
+      # Two things are checked, and the second is the one that matters: that the
+      # path exists in a clean checkout, and that it denies when the real gate is
+      # nowhere to be found.
+      - name: The plugin's gate exists in a clean checkout and fails closed
+        run: |
+          set -euo pipefail
+
+          hook=$(python3 -c "
+          import json
+          h = json.load(open('hooks/hooks.json'))
+          print(h['hooks']['PreToolUse'][0]['hooks'][0]['command'])
+          ")
+          echo "hooks.json points at: $hook"
+
+          # Resolve it the way Claude Code would, with this checkout as the root.
+          resolved=${hook//'${CLAUDE_PLUGIN_ROOT}'/$(pwd)}
+          if [ ! -x "$resolved" ]; then
+            echo "FAIL: $resolved is not an executable file in a clean checkout." >&2
+            echo "A hook that cannot start does not block -- the tool call proceeds." >&2
+            exit 1
+          fi
+
+          # The real falsifier: no ccn-gate on PATH, no bundled binary.
+          out=$(echo '{"hook_event_name":"PreToolUse","tool_name":"Bash"}' \
+                | env -i PATH=/usr/bin:/bin "$resolved" || true)
+          echo "$out"
+          python3 -c "
+          import json, sys
+          d = json.loads(sys.argv[1])['hookSpecificOutput']
+          assert d['permissionDecision'] == 'deny', d
+          assert d['permissionDecisionReason'].strip(), 'a deny needs a reason'
+          print('OK: with no gate binary anywhere, the hook denies')
+          " "$out"
+
+          # And it must block by exit code too, in case the JSON is never parsed.
+          set +e
+          echo '{"tool_name":"Bash"}' | env -i PATH=/usr/bin:/bin "$resolved" >/dev/null 2>&1
+          code=$?
+          set -e
+          if [ "$code" != "2" ]; then
+            echo "FAIL: the fallback exited $code; only exit 2 blocks on its own" >&2
+            exit 1
+          fi
+
+          # The plugin must ship the mediated path as well as the gate, or the
+          # gate's redirects point at tools nobody serves.
+          python3 -c "
+          import json
+          m = json.load(open('.claude-plugin/plugin.json'))
+          servers = m.get('mcpServers') or {}
+          assert 'nucleus' in servers, 'the plugin declares no nucleus MCP server'
+          print('OK: the plugin ships the gate and the server')
+          "
+
       # The status line renders on every assistant message and on a 3s timer, so
       # two things must hold that unit tests cannot see: it must never reach the
       # node (a bar that boots a microVM to draw itself is a disaster), and it

@@ -126,9 +126,34 @@ claude --settings .claude/settings.nucleus.json \
        --disallowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Agent,Task,TodoWrite,BashOutput,KillShell
 ```
 
-`.claude/settings.nucleus.json` ships in this repo and holds nothing but the hook. Or install the
-whole thing as a plugin — the manifest in `.claude-plugin/` ships the gate and the server together,
-so they arrive in the same load and the ordering problem does not arise.
+`.claude/settings.nucleus.json` ships in this repo and holds nothing but the hook and the status
+line. Or install the whole thing as a plugin — `.claude-plugin/plugin.json` declares the MCP server
+and `hooks/hooks.json` the gate, so they arrive in the same load and the ordering problem does not
+arise. **Step 1 is still required**: the plugin carries configuration, not binaries, and a plugin
+that cannot find `ccn-gate` refuses every tool until you install them (see below).
+
+### The gate is a script, and that is load-bearing
+
+`hooks/hooks.json` points `PreToolUse` at `scripts/gate.sh`, a committed shell script, rather than
+straight at the `ccn-gate` binary. The script finds the binary — `$CCN_GATE`, then a bundled
+`bin/ccn-gate`, then `PATH` — and **denies when it cannot**, with JSON and with exit 2, which blocks
+on its own even if the JSON is never read.
+
+That indirection exists because of how Claude Code treats a hook it cannot start. From the hooks
+documentation:
+
+> When the script path doesn't exist or isn't executable, the shell exits with a code like 127 and
+> you see the same notice… For most hook events, the action proceeds.
+
+A missing hook is **not** a blocked tool call. It is an unmediated one. So a gate that is a path to a
+binary is a gate that is off whenever the binary is absent, silently, while the user believes it is
+on — which is exactly what this plugin shipped, since the hook pointed into a gitignored `bin/` that
+nothing builds. `ccn-gate`'s every internal error path denies, and none of them could help, because
+the process never started.
+
+A committed script is always present, so the deny always happens. CI checks both halves: that the
+path in `hooks.json` resolves to an executable file in a clean checkout, and that with no gate binary
+anywhere it still denies and still exits 2.
 
 ### Opt-in, not `.claude/settings.json`
 
@@ -348,6 +373,10 @@ printed here previously was missing `Task`, one of the two names for the tool it
 Named here rather than discovered later:
 
 - **Inference is outside the boundary.** See above. Effects are contained; context is not.
+- **A plugin carries configuration, not binaries.** `cargo install` is a prerequisite of the plugin,
+  not an alternative to it. The gate denies every tool until the binaries are there rather than
+  letting them through, but a `bin/` of prebuilt binaries per platform is the thing that would make
+  the plugin self-contained, and this repo does not build one.
 - **The gate is a hook, and the user is not the only one who can edit it.** `disableAllHooks`, an
   uninstalled plugin, or an edited `settings.json` all remove it; there is no in-band enforcement
   that survives the harness being reconfigured. Worth saying who can do the editing: `Write`, `Edit`
