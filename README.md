@@ -230,43 +230,39 @@ which one you pick. `nucleus profiles` lists them.
 
 Stated because the difference matters and this repo has been wrong about it before.
 
-**Run against a live node** (macOS 26.6, Lima 2.2.0, nucleus 1.0.0, artifacts from the pinned
-release): `pod.yaml` reaches the node and clears admission, and a microVM boots from it — the node's
-boot trace shows `vmm.preflight`, `net.create_netns`, `net.default_deny`, `prepare_jail`,
-`firecracker.spawn`, `seccomp.wait`, `vsock.wait`, `attestation.hash` and `cert.issue` all
-completing. `nucleus verify --tier2` on the same host boots a pod whose tool-proxy serves an allowed
-`glob` from the guest sandbox and refuses a forbidden operation as `kernel_denied`, so mediation
-itself works in this environment.
+**Run against a live Firecracker pod** (macOS 26.6, Lima 2.2.0, nucleus 1.0.0, artifacts from the
+pinned release, pod at tier 2 `spiffe-identity`). `ccn-mcp --check` completes, and every mediated
+tool reaches its route and comes back with a *policy verdict* rather than a `422` — which is the
+thing that was broken:
 
-**Not yet run end to end**: `ccn-mcp --check` against a real pod. A pod created with
-`nucleus node create` *from the host* never reaches a healthy tool-proxy — boot completes every stage
-above and then `proxy.health_wait` times out after ~30 s. This is not specific to `pod.yaml`: the
-spec `nucleus verify --tier2` uses successfully fails the same way when created from the host, and
-the difference is the creation path rather than the spec. Since `ccn-mcp`'s pod discovery calls
-`nucleus node create`, **the automatic path cannot produce a usable pod on macOS today.** Point
-`NUCLEUS_PROXY_URL` at a pod created another way and the bridge itself works; the discovery
-convenience is what is blocked. Tracked upstream rather than worked around here.
+```
+  [1] run true                              --    refused by policy: approval required: 'RunBash true'
+  [2] write ccn-check-da6a2dc8.txt          --    refused by policy: approval required: 'WriteFiles …'
+  [3] read it back                          --    refused by policy: access denied: path … blocked by policy
+  [4] read /etc/shadow (must be refused)    ok    refused: sandbox escape: … resolves outside sandbox root
+```
 
-### A mediated write does not edit your working tree
+Individual calls through the MCP surface, against the same pod:
 
-This is the part the diagram above will mislead you about, so it is stated plainly.
+| call | result |
+|---|---|
+| `glob {"pattern":"*"}` | **served from inside the microVM** — `{"matches":["audit"]}` |
+| `read /etc/os-release` | `403` sandbox escape — outside `work_dir` |
+| `grep` | `403` kernel denied, `WithinDelegationCeiling` — that pod's grant covers glob and read |
+| `web_fetch https://example.com` | `403` **ifc denied** — the flow layer refusing egress |
+| `run "ls \| wc -l"` | refused *by the bridge*, before the pod: there is no shell |
 
-Under the Firecracker driver — nucleus's production default — the pod's filesystem is the microVM's,
-and **there is no host directory in it.** That is permanent rather than unimplemented: Firecracker
-rejected virtio-fs on attack-surface grounds and a 9p implementation before it, and `PodSpec` has no
-mounts, shares or volumes field to add one with. `work_dir` is a guest path.
+So the translation, the refusal-versus-fault split, the escape probe, the shell refusal and the
+status line all hold on the real path, not just against a mock.
 
-So `Write` through this bridge creates a file *inside the pod*. The repository you have open in your
-editor is not touched. Getting a source tree in front of the model means putting it in the pod:
-baked into the rootfs, or handed over as `image.data_path` (a read-only block device — the supported
-way to put a corpus in front of a workload), with `image.scratch_path` for what the session writes.
-**Exporting the result back out is not solved here**, and that is the honest state of it: this bridge
-is usable today for work that begins and ends inside the pod, and incomplete for editing a checkout
-in place.
-
-The exception is `DriverKind::Local`, which runs the proxy as a host subprocess — "process-only.
-Dev/test; refused in production". There a mediated write does reach host files, bounded only by
-`work_dir` and the path policy. See Known Gaps for what that implies about the gate.
+**Not yet run**: the *discovery* path. A pod created with `nucleus node create` from the host
+completes every boot stage — `vmm.preflight`, `net.create_netns`, `net.default_deny`, `prepare_jail`,
+`firecracker.spawn`, `seccomp.wait`, `vsock.wait`, `attestation.hash`, `cert.issue` — and then times
+out in `proxy.health_wait` after ~30 s. Two contributing causes are known: a second pod requesting a
+`vsock.guest_cid` already held by a running one fails this way, and the spec `nucleus verify --tier2`
+boots successfully fails the same way when created from the host. Until that is understood, set
+`NUCLEUS_PROXY_URL` to a pod's `proxy_addr` (`nucleus node pods` reports it) rather than relying on
+`ccn-mcp` to create one.
 
 ## What the model will find inside the pod
 
