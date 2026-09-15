@@ -1,5 +1,5 @@
 {
-  "description": "Complete mediation: no built-in tool executes on the host.",
+  "description": "Complete mediation: no built-in tool executes on the host. Points at a committed script, not a built binary, so a plugin whose binaries are missing denies rather than failing open.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/ccn-gate",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/gate.sh",
             "args": [],
             "timeout": 10,
             "statusMessage": "nucleus: checking mediation"

@@ -1,0 +1,15 @@
+installed: 600 root /srv/gatehouse/nucleus-worker.json
+=== every path it names ===
+  controller           OK        /srv/gatehouse/controllers/controller-canon2
+  app_key              OK        /srv/gatehouse/runtime/app-key.pem
+  source_repository    OK        /srv/gatehouse/nucleus
+  git                  OK        /usr/bin/git
+  prepared_inputs      OK        /gj/img-fix/inputs.json
+  bootstrap_manifest   OK        /srv/gatehouse/bootstrap-fix.json
+  rustup               OK        /srv/gatehouse/cargo/bin/rustup
+  rustup_home          OK        /root/.rustup
+  tls_cert             OK        /srv/gatehouse/runtime/client/cert.pem
+  tls_key              OK        /srv/gatehouse/runtime/client/key.pem
+  trust_bundle         OK        /srv/gatehouse/runtime/client/ca.pem
+  attempts_dir         will create /gj/attempts
+=== controller digest matches the pin? ===
