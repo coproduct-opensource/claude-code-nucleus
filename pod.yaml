@@ -29,6 +29,28 @@ spec:
   # A working day. The pod is a session's worth of tool calls, not one task.
   timeout_seconds: 86400
 
+  # The Firecracker driver requires both of these. They are `Option` on
+  # `PodSpecInner`, so a spec without them parses perfectly and is then refused
+  # at launch with "missing spec.image" — which is how this file shipped: it was
+  # validated as parsing and never as booting.
+  image:
+    # Paths on the machine running nucleus-node. On macOS that is inside the
+    # Lima VM, not your Mac; `nucleus setup` installs both here.
+    kernel_path: /var/lib/nucleus/artifacts/vmlinux
+    rootfs_path: /var/lib/nucleus/artifacts/rootfs.ext4
+    # The default, and load-bearing (nucleus#2784): a writable rootfs is
+    # hard-linked into the jail rather than copied, so one pod's writes would be
+    # visible to the next and would change the very artifact whose digest
+    # `verify-attestation` checks. `/work` is writable in the guest regardless.
+    read_only: true
+
+  vsock:
+    # How the tool-proxy inside the guest reaches the node — and the path the
+    # signed MediationReceipts are shipped over. Give concurrent pods distinct
+    # CIDs; 3 is the conventional first guest.
+    guest_cid: 3
+    port: 5005
+
   policy:
     type: profile
     # read/write/edit/run/glob/grep, network-isolated, no push. It blocks

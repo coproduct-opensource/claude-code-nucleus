@@ -226,6 +226,27 @@ inline — including the label it deliberately omits (`enable_pod_mgmt`, which i
 is denied). Swap the profile to change what the session may do; nothing in this bridge needs to know
 which one you pick. `nucleus profiles` lists them.
 
+### What has and has not been run
+
+Stated because the difference matters and this repo has been wrong about it before.
+
+**Run against a live node** (macOS 26.6, Lima 2.2.0, nucleus 1.0.0, artifacts from the pinned
+release): `pod.yaml` reaches the node and clears admission, and a microVM boots from it — the node's
+boot trace shows `vmm.preflight`, `net.create_netns`, `net.default_deny`, `prepare_jail`,
+`firecracker.spawn`, `seccomp.wait`, `vsock.wait`, `attestation.hash` and `cert.issue` all
+completing. `nucleus verify --tier2` on the same host boots a pod whose tool-proxy serves an allowed
+`glob` from the guest sandbox and refuses a forbidden operation as `kernel_denied`, so mediation
+itself works in this environment.
+
+**Not yet run end to end**: `ccn-mcp --check` against a real pod. A pod created with
+`nucleus node create` *from the host* never reaches a healthy tool-proxy — boot completes every stage
+above and then `proxy.health_wait` times out after ~30 s. This is not specific to `pod.yaml`: the
+spec `nucleus verify --tier2` uses successfully fails the same way when created from the host, and
+the difference is the creation path rather than the spec. Since `ccn-mcp`'s pod discovery calls
+`nucleus node create`, **the automatic path cannot produce a usable pod on macOS today.** Point
+`NUCLEUS_PROXY_URL` at a pod created another way and the bridge itself works; the discovery
+convenience is what is blocked. Tracked upstream rather than worked around here.
+
 ### A mediated write does not edit your working tree
 
 This is the part the diagram above will mislead you about, so it is stated plainly.
