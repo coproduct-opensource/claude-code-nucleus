@@ -81,8 +81,10 @@ Three tests are the falsifiers, and each fails loudly rather than subtly:
 
 ## Install
 
-Requires a running nucleus pod. `nucleus setup --install-deps` provisions one on Apple Silicon
-(M3+, macOS 15+); this repo does not provision it.
+Requires a running nucleus pod. `nucleus setup --install-deps` provisions the *node* on Apple
+Silicon (M3+, macOS 15+); a pod is a separate step, and the spec it should use ships here as
+[`pod.yaml`](pod.yaml) — see [Which pod, and where a write lands](#which-pod-and-where-a-write-lands),
+because that file decides the reach of every mediated call.
 
 **The order below is load-bearing.** A `PreToolUse` hook takes effect in the session that writes it,
 immediately. An MCP server is read once, at session start. So installing the gate before the
@@ -152,6 +154,43 @@ hooks:
 The socket wins when both are set. Silently preferring the weaker of two configured transports is
 how a deployment ends up authenticating with a bearer token nobody knew was still in use.
 
+## Which pod, and where a write lands
+
+The gate refuses everything on the host and `ccn-mcp` forwards it into the pod, so **the pod's spec,
+not the gate, decides the reach of a mediated call.** A bridge that achieves complete mediation
+against an unspecified policy has achieved complete *routing*: the call certainly reaches the
+lattice, and what the lattice then permits is out of frame. So the spec ships here:
+
+```sh
+nucleus node create pod.yaml
+```
+
+[`pod.yaml`](pod.yaml) is `work_dir: /work` under the `codegen` profile, with its choices explained
+inline — including the label it deliberately omits (`enable_pod_mgmt`, which is why `Agent`/`Task`
+is denied). Swap the profile to change what the session may do; nothing in this bridge needs to know
+which one you pick. `nucleus profiles` lists them.
+
+### A mediated write does not edit your working tree
+
+This is the part the diagram above will mislead you about, so it is stated plainly.
+
+Under the Firecracker driver — nucleus's production default — the pod's filesystem is the microVM's,
+and **there is no host directory in it.** That is permanent rather than unimplemented: Firecracker
+rejected virtio-fs on attack-surface grounds and a 9p implementation before it, and `PodSpec` has no
+mounts, shares or volumes field to add one with. `work_dir` is a guest path.
+
+So `Write` through this bridge creates a file *inside the pod*. The repository you have open in your
+editor is not touched. Getting a source tree in front of the model means putting it in the pod:
+baked into the rootfs, or handed over as `image.data_path` (a read-only block device — the supported
+way to put a corpus in front of a workload), with `image.scratch_path` for what the session writes.
+**Exporting the result back out is not solved here**, and that is the honest state of it: this bridge
+is usable today for work that begins and ends inside the pod, and incomplete for editing a checkout
+in place.
+
+The exception is `DriverKind::Local`, which runs the proxy as a host subprocess — "process-only.
+Dev/test; refused in production". There a mediated write does reach host files, bounded only by
+`work_dir` and the path policy. See Known Gaps for what that implies about the gate.
+
 ## What the model will find inside the pod
 
 The mediated tools keep the built-ins' argument names — `ccn-mcp` translates them to the proxy's
@@ -197,9 +236,22 @@ printed here previously was missing `Task`, one of the two names for the tool it
 Named here rather than discovered later:
 
 - **Inference is outside the boundary.** See above. Effects are contained; context is not.
-- **The gate is a hook.** `disableAllHooks`, an uninstalled plugin, or a `settings.json` the user
-  edited all remove it. There is no in-band enforcement that survives the harness being
-  reconfigured — that is a property of running the agent on the host.
+- **The gate is a hook, and the user is not the only one who can edit it.** `disableAllHooks`, an
+  uninstalled plugin, or an edited `settings.json` all remove it; there is no in-band enforcement
+  that survives the harness being reconfigured. Worth saying who can do the editing: `Write`, `Edit`
+  and `NotebookEdit` are mediated to `/v1/write`, so the model has a *sanctioned* write path, and
+  `.claude/settings.json` is the file that installs the gate mediating it. That is the constrained
+  party removing its own constraint by the route the bridge provides, not operator error — and
+  `.mcp.json` is the worse version, since rewriting it adds an **unmediated** MCP server rather than
+  merely removing a hook.
+
+  Whether it is reachable is decided by the driver, not by this repo. Under Firecracker it is not:
+  no host directory is in the pod, so a mediated write cannot touch the harness config (see above).
+  Under `DriverKind::Local` it is live, and there the pod's `work_dir` and path policy are the only
+  thing standing between the model and the gate's own configuration — keep the harness config
+  outside `work_dir`. Nucleus's canonical profiles block credential material (`**/.ssh/**`,
+  `**/.env*`, `**/credentials*`) but none of them blocks `.claude/` or `.mcp.json`, filed as
+  [nucleus#2782](https://github.com/coproduct-opensource/nucleus/issues/2782).
 - **`Edit` is mediated as a whole-file `write`.** The pod owns the file, so a partial edit would have
   to be applied on the far side; today the model reads then writes. Semantically weaker than the
   built-in.
@@ -212,6 +264,10 @@ Named here rather than discovered later:
   above `never`, which `codegen` does not grant. Mediating to it redirected the model into a 404. The
   denial names all three conditions; `Agent`/`Task` work again if nucleus makes the route
   unconditional or this bridge learns to require an orchestrator pod.
+- **The pod's filesystem is not your working tree.** Stated above and repeated here because it is the
+  gap most likely to surprise: under the production driver a mediated write lands inside the microVM,
+  and there is no export step. Work that begins and ends in the pod is fine; editing a checkout in
+  place is not supported yet.
 - **Receipts are passed through, not verified here.** Verification is
   [`nucleus-verifier`](https://github.com/coproduct-opensource/nucleus)'s job; this bridge would only
   be marking its own homework.
