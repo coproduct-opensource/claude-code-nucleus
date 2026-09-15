@@ -1,0 +1,42 @@
+# The pod this bridge is designed against.
+#
+# Everything ccn-gate refuses on the host, ccn-mcp forwards here — so this file,
+# not the gate, is what decides the reach of a mediated call. The README's
+# "Which pod, and where a write lands" section is the prose; this is the spec.
+#
+#   nucleus node create -f pod.yaml
+#
+# Adjust it. It is a starting point with its choices explained, not a policy
+# anyone else's threat model has to accept.
+apiVersion: nucleus/v1
+kind: Pod
+metadata:
+  name: claude-code
+  labels:
+    # Deliberately absent: `enable_pod_mgmt: "true"`.
+    #
+    # It is what would mount /v1/pod/create and make subagents mediable. The
+    # bridge denies Agent/Task instead (see Known Gaps), because an orchestrator
+    # pod can spawn pods, and handing that to the session by default is a larger
+    # grant than the thing it buys.
+    app: claude-code-nucleus
+spec:
+  # The root every mediated path resolves against. `read`/`write`/`glob`/`grep`
+  # accept a path under it, absolute or relative; anything else is refused as a
+  # sandbox escape.
+  work_dir: /work
+
+  # A working day. The pod is a session's worth of tool calls, not one task.
+  timeout_seconds: 86400
+
+  policy:
+    type: profile
+    # read/write/edit/run/glob/grep, network-isolated, no push. It blocks
+    # **/.ssh/**, **/.aws/**, **/.env*, **/credentials*, /etc/shadow and
+    # /etc/passwd, and sets `manage_pods: never` and `web_fetch`/`web_search`
+    # to `never` — so those two mediated tools are served by the proxy and
+    # refused by the lattice, which is a verdict rather than a break.
+    #
+    # `nucleus profiles` lists the rest. Swap this line to change what the
+    # session may do; nothing in this bridge needs to know which one you pick.
+    name: codegen
