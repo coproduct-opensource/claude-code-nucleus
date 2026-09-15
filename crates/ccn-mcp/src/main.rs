@@ -17,6 +17,8 @@
 //! The one judgement it does make is fail-closed: a transport error becomes a
 //! tool error the model can see, never a synthesised success.
 
+mod check;
+mod discover;
 mod translate;
 mod transport;
 
@@ -24,14 +26,38 @@ use ccn_core::mediated_tools;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use translate::to_proxy_body;
-use transport::Transport;
+use transport::{Transport, TransportError};
 
 /// The MCP protocol revision this server implements.
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
+/// The transport, from the environment or — failing that — from the node.
+///
+/// `NUCLEUS_POD_SOCK` and `NUCLEUS_PROXY_URL` are the explicit forms and win.
+/// Neither being set used to be a fatal misconfiguration; it is now the common
+/// case, because a Firecracker pod's address is the ephemeral `proxy_addr` the
+/// node assigned it and there is nothing to hardcode. See `discover`.
+pub fn resolve_transport() -> Result<Transport, TransportError> {
+    match Transport::from_env() {
+        Err(TransportError::Unconfigured) => {
+            let base = discover::find_or_create_pod().map_err(TransportError::Discovery)?;
+            Ok(Transport::Http { base, token: None })
+        }
+        other => other,
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    let transport = Transport::from_env();
+    // `--check` walks the mediated path and exits; it is not a JSON-RPC session.
+    // Anything else is ignored rather than rejected: this process is spawned by
+    // the harness, and refusing to start over an unrecognised flag would take
+    // the mediated path down and leave the model with nothing but denials.
+    if std::env::args().skip(1).any(|a| a == "--check") {
+        std::process::exit(check::run().await);
+    }
+
+    let transport = resolve_transport();
     let stdin = BufReader::new(tokio::io::stdin());
     let mut lines = stdin.lines();
     let mut stdout = tokio::io::stdout();
@@ -89,7 +115,8 @@ fn initialize() -> Value {
         "instructions": "Every tool here executes inside a Firecracker microVM under the nucleus \
                          permission lattice. Host built-ins are denied by the PreToolUse gate; use \
                          these instead. A refusal from one of these tools is a policy verdict, not \
-                         a bug — do not attempt to work around it."
+                         a bug — do not attempt to work around it. The pod's filesystem is not the \
+                         host's: files written here do not appear in the user's working tree."
     })
 }
 
@@ -122,7 +149,10 @@ fn describe(name: &str, route: &str) -> String {
         "web_search" => "Search the web through the pod's mediated egress (taints the session)",
         _ => "Mediated effect",
     };
-    format!("{what}. Enforced by nucleus at {route}; returns a signed mediation receipt.")
+    format!(
+        "{what}. Enforced by nucleus at {route}: the permission lattice decides before the effect \
+         happens, and a signed mediation receipt is recorded node-side."
+    )
 }
 
 /// Input schemas mirror the host built-ins' argument names, so the model does
@@ -249,9 +279,12 @@ async fn call_tool(transport: &Transport, params: &Value) -> Result<Value, Strin
         .await
         .map_err(|e| e.to_string())?;
 
-    // The proxy's reply carries the result and, when the effect was performed,
-    // the mediation receipt. Both are handed back verbatim: summarising a
-    // receipt would make it unverifiable, which is the only thing it is for.
+    // Handed back verbatim. The reply carries the result and nothing else — the
+    // receipt is not in it, and never was: a Firecracker guest cannot reach the
+    // node over HTTP, so the proxy ships each signed receipt over the workload
+    // vsock as it is produced and the node collects it where the pod cannot
+    // retract it. Summarising the result here would only lose bytes the model
+    // asked for.
     Ok(json!({
         "content": [{ "type": "text", "text": serde_json::to_string_pretty(&reply).unwrap_or_default() }],
         "isError": false

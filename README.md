@@ -114,9 +114,10 @@ cargo install --git https://github.com/coproduct-opensource/claude-code-nucleus 
 
 ```sh
 claude mcp list          # `nucleus` must be listed and Connected
+ccn-mcp --check          # and the path behind it must actually work
 ```
 
-If it is not, stop here. Installing the gate now is what strands a session.
+If either fails, stop here. Installing the gate now is what strands a session.
 
 **4. Turn the gate on**, per session:
 
@@ -147,12 +148,42 @@ hooks:
 
 | Variable | Meaning |
 |---|---|
-| `NUCLEUS_POD_SOCK` | Peer-credential-verified Unix socket (`nucleus-tool-proxy --listen-unix`). **Preferred** — the bridge holds no secret at all. |
-| `NUCLEUS_PROXY_URL` | Node-forwarded `http://` surface, for a non-local pod. |
-| `NUCLEUS_SESSION_TOKEN` | Bearer token, HTTP transport only. Read per call, so revocation takes effect immediately. |
+| `NUCLEUS_POD_SOCK` | Peer-credential-verified Unix socket (`nucleus-tool-proxy --listen-unix`). The bridge holds no secret at all. **Linux container driver only.** |
+| `NUCLEUS_PROXY_URL` | The pod's node-forwarded `http://` surface. **What you use on macOS**, and fine there. |
+| `NUCLEUS_SESSION_TOKEN` | Bearer token, HTTP transport only. Read per call, so revocation takes effect immediately. Usually unnecessary — see below. |
+| `NUCLEUS_POD_NAME` | Pod to look for when neither transport is set. Default `claude-code`. |
+| `NUCLEUS_POD_SPEC` | Spec to create from when no such pod is running. Default `pod.yaml`. |
 
 The socket wins when both are set. Silently preferring the weaker of two configured transports is
-how a deployment ends up authenticating with a bearer token nobody knew was still in use.
+how a deployment ends up authenticating with a bearer token nobody knew was still in use. A variable
+set to the empty string counts as unset, so `NUCLEUS_POD_SOCK=` is a way to force the HTTP path.
+
+**On macOS the socket cannot exist, and the README used to call it preferred anyway.** `--listen-unix`
+is the Linux container driver's transport; a Firecracker pod lives inside the Lima VM, where no host
+path reaches it. So every Mac user takes the HTTP hop, and that is the right posture rather than a
+downgrade: the address is a loopback port the node forwards, and the secret authenticating it lives
+in the node, which HMACs the hop. Nothing is held here, which was the reason to prefer the socket in
+the first place.
+
+### Finding the pod
+
+That address is the `proxy_addr` the node assigned when the pod was created — per-pod, ephemeral,
+and impossible to hardcode. Nothing used to tell you where to read it.
+
+So when neither variable is set, `ccn-mcp` asks: `nucleus node pods` for a running pod named
+`$NUCLEUS_POD_NAME`, and `nucleus node create $NUCLEUS_POD_SPEC` if there is none. Each step is
+announced on stderr, because a bridge that silently boots a microVM would be worse than one that
+cannot find a pod:
+
+```
+ccn-mcp: no running pod named `claude-code`; creating one from pod.yaml
+ccn-mcp: created pod at http://127.0.0.1:52341
+```
+
+It shells out to `nucleus` rather than speaking the node's API, deliberately: the node's URL, its
+HMAC request signing and its secrets file are an authentication scheme, and a second copy of one
+living outside the pod is the thing this bridge exists not to do. The CLI already holds it, already
+reads your config, and is already installed — a pod cannot exist without it.
 
 ## Which pod, and where a write lands
 
@@ -209,6 +240,36 @@ Paths may be absolute under the pod's `work_dir` or relative to it; anything els
 sandbox escape.
 
 ## Verify it is on
+
+Two halves, and the second is the one that used to be missing.
+
+```sh
+ccn-mcp --check
+```
+
+```
+nucleus bridge check
+
+  transport   http://127.0.0.1:52341 (no token — the node signs this hop)
+  health      ok
+  tools       7 — run, read, write, glob, grep, web_fetch, web_search
+
+  [1] run true                              ok    the pod executed a command
+  [2] write ccn-check-4f0e3950.txt          ok    32 bytes
+  [3] read it back                          ok    identical
+  [4] read /etc/shadow (must be refused)    ok    refused: resolves outside the sandbox root
+
+the mediated path works, and the boundary refused what it should.
+```
+
+Step 4 is the point of it. Steps 1–3 prove calls *arrive*; only a call that must be refused, and
+was, proves something is *deciding* when they do. It probes an absolute path outside the pod's root
+rather than a capability, so it means the same thing under every profile — a stricter policy than
+`codegen` is a choice, and the check reports a policy refusal as the verdict it is rather than
+failing on it. What fails: an unreachable pod, a `404` (this pod does not serve a route the bridge
+advertises), a `422` (the bridge is sending a body the route cannot read), and step 4 succeeding.
+
+The gate is the other half:
 
 ```sh
 echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"id"}}' | ccn-gate
@@ -268,9 +329,12 @@ Named here rather than discovered later:
   gap most likely to surprise: under the production driver a mediated write lands inside the microVM,
   and there is no export step. Work that begins and ends in the pod is fine; editing a checkout in
   place is not supported yet.
-- **Receipts are passed through, not verified here.** Verification is
-  [`nucleus-verifier`](https://github.com/coproduct-opensource/nucleus)'s job; this bridge would only
-  be marking its own homework.
+- **Receipts are not in the replies at all.** This README used to say each mediated call "returns a
+  signed mediation receipt". It does not: a Firecracker guest cannot reach the node over HTTP, so the
+  proxy ships each signed `MediationReceipt` over the workload vsock as it is produced, and the node
+  collects it at `<node-state>/pods/<pod-id>/collected-receipts.jsonl` — the copy the pod cannot
+  retract. Verify them with `nucleus-audit verify-mediation-receipts`. Verification is nucleus's job
+  either way; this bridge would only be marking its own homework.
 
 ## Licence
 
