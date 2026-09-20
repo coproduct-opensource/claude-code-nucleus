@@ -1,0 +1,27 @@
+- main [ref=f1e2]:
+  - heading "a gatehouse run verifier 0.0.1" [level=1] [ref=f1e3]:
+    - text: a gatehouse run
+    - generic [ref=f1e4]: verifier 0.0.1
+  - paragraph [ref=f1e5]:
+    - text: Everything on this page comes out of one receipt. The flame graph is the
+    - code [ref=f1e6]: spans
+    - text: the executor measured and
+    - emphasis [ref=f1e7]: signed
+    - text: ", not a log this page scraped; the gate, its scope and its capability are read from the plan the receipt carries. The decision below is not this page's opinion — it is"
+    - code [ref=f1e8]: gatehouse-verify
+    - text: "compiled to wasm, the same crate the lane runs, re-deriving the verdict from the receipt and the trust anchor you paste. Serve this file from anywhere: it can be wrong about nothing you cannot check here."
+  - generic [ref=f1e9]:
+    - text: a
+    - code [ref=f1e10]: DecideInput
+    - text: — receipt, trust anchor, expectation
+  - textbox "a DecideInput — receipt, trust anchor, expectation" [ref=f1e11]:
+    - /placeholder: "{\"receipt\": …, \"trust\": …, \"expect\": …}"
+  - generic [ref=f1e12]:
+    - button "Verify and draw" [ref=f1e13] [cursor=pointer]
+    - button "Load a sample" [ref=f1e14] [cursor=pointer]
+  - generic [ref=f1e15]: paste a receipt, or load the sample
+  - heading "what ran" [level=2] [ref=f1e16]
+  - table:
+    - rowgroup
+  - heading "where the time went" [level=2] [ref=f1e17]
+  - generic [ref=f1e18]: "No network after load. The wasm decides; this page only draws — which is the split that matters: a drawing you can check by eye, a decision you can check by running it yourself."

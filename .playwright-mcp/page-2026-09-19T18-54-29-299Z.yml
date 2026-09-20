@@ -1,0 +1,13 @@
+- main [ref=f5e2]:
+  - heading "gatehouse 0.0.1" [level=1] [ref=f5e3]:
+    - text: gatehouse
+    - generic [ref=f5e4]: 0.0.1
+  - paragraph [ref=f5e5]: "One receipt in. The flame graph is the spans the executor signed, not a log this page scraped. The decision is not this page's opinion — it is gatehouse-verify compiled to wasm, re-deriving the verdict from the receipt and the trust anchor you paste. Serve this file from anywhere: it can be wrong about nothing you cannot check here."
+  - textbox "receipt" [ref=f5e6]
+  - generic [ref=f5e7]:
+    - button "decide" [ref=f5e8] [cursor=pointer]
+    - button "sample" [ref=f5e9] [cursor=pointer]
+  - heading "receipt" [level=2] [ref=f5e11]
+  - table:
+    - rowgroup
+  - heading "span" [level=2] [ref=f5e12]
