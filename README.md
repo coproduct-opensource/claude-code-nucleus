@@ -155,6 +155,29 @@ A committed script is always present, so the deny always happens. CI checks both
 path in `hooks.json` resolves to an executable file in a clean checkout, and that with no gate binary
 anywhere it still denies and still exits 2.
 
+Both of those are properties of the **repository**, and the sentence above has one more scope to
+run. A gate that is a path to a binary is off whenever the binary is absent; a gate that is a hook
+in a plugin is off whenever the plugin is not installed — and that case is quieter still, because
+an absent plugin does not deny, it simply never runs. No JSON, no exit 2, no notice. CI cannot see
+it: CI has no host to look at.
+
+So `scripts/check-boundary-in-force.sh` answers the one question neither half covers — is the
+boundary up on **this** machine, right now — by reading the plugin's installed and enabled state,
+`disableAllHooks`, and whether `ccn-gate` can be found:
+
+```
+scripts/check-boundary-in-force.sh    # IN FORCE / NOT IN FORCE, exit 0 / 1
+```
+
+It is not enforcement and must not be read as any: it reads host configuration, and the constrained
+party can edit host configuration — that is the same sanctioned write path the limitations section
+names below. What it changes is that **absence stops being silent**. There is a difference between
+a control that can be removed and a control whose removal nothing reports, and only the second kind
+costs you a day: on 2026-09-21 this repository's other hook, `disk-warn.sh`, did not fire because
+the plugin was not installed, and the outage it was written to prevent happened in full — both Lima
+VMs dead, a host-side `e2fsck`, a source file in a runner workspace reduced to 11337 NUL bytes that
+`git status` called clean, and CI stalled with 98 jobs queued and no runner to take them.
+
 ### Opt-in, not `.claude/settings.json`
 
 Putting the hook in `.claude/settings.json` applies it to every session in the directory, which is
