@@ -1,0 +1,96 @@
+- main [ref=f4e2]:
+  - heading "gatehouse 0.0.1" [level=1] [ref=f4e3]:
+    - text: gatehouse
+    - generic [ref=f4e4]: 0.0.1
+  - paragraph [ref=f4e5]: "One receipt in. The flame graph is the spans the executor signed, not a log this page scraped. The decision is not this page's opinion — it is gatehouse-verify compiled to wasm, re-deriving the verdict from the receipt and the trust anchor you paste. Serve this file from anywhere: it can be wrong about nothing you cannot check here."
+  - textbox "receipt" [ref=f4e6]: "{ \"receipt\": { \"version\": 1, \"session\": { \"session_id\": \"spiffe://gatehouse/job/7\", \"issuer_kid\": \"node-1\", \"issued_at_micros\": 1, \"parent_chain\": [] }, \"projections\": [ { \"kind\": \"ci\", \"body\": { \"binding\": null, \"certificate\": null, \"commit\": \"cccccccccccccccccccccccccccccccccccccccc\", \"env\": \"a40326b85785f14a066d46099b0a4a47f4a32138da606e41fb4d4ed35f4f7ac8\", \"exit_code\": 0, \"finished_micros\": 2, \"gate_def\": \"32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed\", \"gate_name\": \"test\", \"log_blake3\": \"llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll\", \"outputs\": [], \"plan\": \"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\", \"repo\": \"coproduct/nucleus\", \"sandbox\": { \"caps_enforced\": true, \"fs_probe\": \"skipped\", \"image\": \"sha256:iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\", \"net_probe\": \"denied\", \"runner_digest\": \"rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\", \"substrate\": \"k3s\" }, \"scope\": \"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\", \"signer_chain\": [ { \"kid\": \"node-1\", \"kind\": \"job_credential\", \"tier\": \"node_attested\" } ], \"spans\": [ { \"dur_us\": 231388930, \"name\": \"step-0\", \"start_us\": 0 }, { \"dur_us\": 16469226, \"name\": \"step-0/prepare\", \"parent\": 0, \"start_us\": 0 }, { \"dur_us\": 95977871, \"name\": \"step-0/run\", \"parent\": 0, \"start_us\": 16469226 }, { \"dur_us\": 7874763, \"name\": \"step-0/checkpoint\", \"parent\": 0, \"start_us\": 112447097 }, { \"dur_us\": 25009000, \"name\": \"step-1\", \"start_us\": 231388930 }, { \"dur_us\": 5535802, \"name\": \"step-1/prepare\", \"parent\": 4, \"start_us\": 231388930 }, { \"dur_us\": 19473198, \"name\": \"step-1/run\", \"parent\": 4, \"start_us\": 236924732 } ], \"started_micros\": 1, \"tree\": \"tttttttttttttttttttttttttttttttttttttttt\", \"tree_kind\": \"committed\", \"verdict\": \"held\" } } ], \"root_hash_hex\": \"eb817245b47794e0867df1cc1fc1082123c4ef12d00bca5389c81d194cd106b4\", \"signature_b64\": \"EvYwWrWCfEco5UhjITErSJkIENN6+2YRweCauuN2fIfFfnXyykweVh3Pk5QMVCIc5k29IPD9DzlGGeMqEazjDg==\" }, \"trust\": { \"keys\": [ { \"kid\": \"node-1\", \"verifying_key_hex\": \"ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1\", \"tier\": \"node_attested\", \"valid_from\": 2, \"valid_to\": 10 } ], \"log_size\": 5, \"required_log_size\": 5, \"root_hex\": \"d33e785a9fd6de9af6cadb2f8479b78df5d42b67143782b585639835f0a4c016\" }, \"expect\": { \"gate_def\": \"32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed\", \"scope\": \"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\", \"env\": \"a40326b85785f14a066d46099b0a4a47f4a32138da606e41fb4d4ed35f4f7ac8\", \"tree\": \"tttttttttttttttttttttttttttttttttttttttt\", \"plan\": \"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\", \"class\": \"required\", \"context\": null, \"scope_bound\": false }, \"inclusion\": { \"index\": 3, \"size\": 5, \"proof\": [ \"7e86d2ef801a405df86260a535724abea3f1228fb2db064a2531590e281e2a94\", \"a2a90e58478f28cbf45e91ea2993b4cb319aa72bd34bd34dcf4310ed167ce29f\", \"d907d820a48a81770c9ad4cf24d2e024e3d814843d58829e258962b9d3535fc7\" ], \"root_hex\": \"d33e785a9fd6de9af6cadb2f8479b78df5d42b67143782b585639835f0a4c016\" } }"
+  - generic [ref=f4e7]:
+    - button "decide" [ref=f4e8] [cursor=pointer]
+    - button "sample" [active] [ref=f4e9] [cursor=pointer]
+  - generic [ref=f4e10]:
+    - strong [ref=f4e13]: Verified node_attested held
+    - group [ref=f4e14]:
+      - generic "decision" [ref=f4e15] [cursor=pointer]
+  - heading "receipt" [level=2] [ref=f4e11]
+  - table [ref=f4e16]:
+    - rowgroup [ref=f4e17]:
+      - row [ref=f4e18]:
+        - cell "repo" [ref=f4e19]
+        - cell "coproduct/nucleus" [ref=f4e20]
+      - row [ref=f4e21]:
+        - cell "gate_name" [ref=f4e22]
+        - cell "test" [ref=f4e23]
+      - row [ref=f4e24]:
+        - cell "gate_def" [ref=f4e25]
+        - cell "32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed" [ref=f4e26]
+      - row [ref=f4e27]:
+        - cell "scope" [ref=f4e28]
+        - cell "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss" [ref=f4e29]
+      - row [ref=f4e30]:
+        - cell "env" [ref=f4e31]
+        - cell "a40326b85785f14a066d46099b0a4a47f4a32138da606e41fb4d4ed35f4f7ac8" [ref=f4e32]
+      - row [ref=f4e33]:
+        - cell "tree" [ref=f4e34]
+        - cell "tttttttttttttttttttttttttttttttttttttttt" [ref=f4e35]
+      - row [ref=f4e36]:
+        - cell "commit" [ref=f4e37]
+        - cell "cccccccccccccccccccccccccccccccccccccccc" [ref=f4e38]
+      - row [ref=f4e39]:
+        - cell "tree_kind" [ref=f4e40]
+        - cell "committed" [ref=f4e41]
+      - row [ref=f4e42]:
+        - cell "verdict" [ref=f4e43]
+        - cell "held" [ref=f4e44]
+      - row [ref=f4e45]:
+        - cell "exit_code" [ref=f4e46]
+        - cell "0" [ref=f4e47]
+      - row [ref=f4e48]:
+        - cell "started_micros" [ref=f4e49]
+        - cell "1" [ref=f4e50]
+      - row [ref=f4e51]:
+        - cell "finished_micros" [ref=f4e52]
+        - cell "2" [ref=f4e53]
+      - row [ref=f4e54]:
+        - cell "log_blake3" [ref=f4e55]
+        - cell "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll" [ref=f4e56]
+      - row [ref=f4e57]:
+        - cell "outputs" [ref=f4e58]
+        - cell "[]" [ref=f4e59]
+      - row [ref=f4e60]:
+        - cell "sandbox.substrate" [ref=f4e61]
+        - cell "k3s" [ref=f4e62]
+      - row [ref=f4e63]:
+        - cell "sandbox.runner_digest" [ref=f4e64]
+        - cell "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr" [ref=f4e65]
+      - row [ref=f4e66]:
+        - cell "sandbox.image" [ref=f4e67]
+        - cell "sha256:iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii" [ref=f4e68]
+      - row [ref=f4e69]:
+        - cell "sandbox.net_probe" [ref=f4e70]
+        - cell "denied" [ref=f4e71]
+      - row [ref=f4e72]:
+        - cell "sandbox.fs_probe" [ref=f4e73]
+        - cell "skipped" [ref=f4e74]
+      - row [ref=f4e75]:
+        - cell "sandbox.caps_enforced" [ref=f4e76]
+        - cell "true" [ref=f4e77]
+      - row [ref=f4e78]:
+        - cell "signer_chain" [ref=f4e79]
+        - 'cell "[{\"kid\":\"node-1\",\"kind\":\"job_credential\",\"tier\":\"node_attested\"}]" [ref=f4e80]'
+      - row [ref=f4e81]:
+        - cell "certificate" [ref=f4e82]
+        - cell "null" [ref=f4e83]
+      - row [ref=f4e84]:
+        - cell "binding" [ref=f4e85]
+        - cell "null" [ref=f4e86]
+  - heading "span" [level=2] [ref=f4e12]
+  - generic [ref=f4e87]:
+    - generic [ref=f4e88]:
+      - generic "step-0 231.4s" [ref=f4e89]
+      - generic "step-1 25.0s" [ref=f4e90]
+    - generic [ref=f4e91]:
+      - generic "step-0/prepare 16.5s" [ref=f4e92]
+      - generic "step-0/run 96.0s" [ref=f4e93]
+      - generic "step-0/checkpoint 7.9s" [ref=f4e94]
+      - generic "step-1/prepare 5.5s" [ref=f4e95]
+      - generic "step-1/run 19.5s" [ref=f4e96]

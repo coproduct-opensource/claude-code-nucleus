@@ -222,6 +222,54 @@ jobs:
 
           echo "OK: --check distinguishes a sound mediated path from an unsound one"
 
+
+      # The check that tells a HOST whether the boundary is up must itself be exercised, or it
+      # is one more thing that claims to be in force and is not. CI has no plugin installed, so
+      # it drives both directions against fabricated homes: a host where every condition holds
+      # must read IN FORCE, and each condition removed on its own must flip it.
+      - name: The boundary check can say both things
+        run: |
+          set -euo pipefail
+          chmod +x scripts/check-boundary-in-force.sh
+
+          fake=$(mktemp -d); mkdir -p "$fake/.claude/plugins" "$fake/bin"
+          printf '#!/bin/sh\nexit 0\n' > "$fake/bin/ccn-gate"; chmod +x "$fake/bin/ccn-gate"
+          good_settings='{"enabledPlugins": {"nucleus@local": true}}'
+          installed='{"version": 2, "plugins": {"nucleus@local": [{"scope": "user"}]}}'
+          echo "$installed" > "$fake/.claude/plugins/installed_plugins.json"
+
+          echo "$good_settings" > "$fake/.claude/settings.json"
+          if ! HOME="$fake" PATH="$fake/bin:$PATH" scripts/check-boundary-in-force.sh; then
+            echo "FAIL: a host where every condition holds must read IN FORCE." >&2
+            exit 1
+          fi
+
+          # Each condition, removed on its own, must red. A check that only ever says one thing
+          # is the defect it exists to catch.
+          fail_one() {
+            if HOME="$fake" PATH="$2:$PATH" scripts/check-boundary-in-force.sh >/dev/null; then
+              echo "FAIL: $1 did not flip the check to NOT IN FORCE." >&2
+              exit 1
+            fi
+            echo "ok: $1 reds"
+          }
+
+          echo '{"enabledPlugins": {"nucleus@local": true}, "disableAllHooks": true}' > "$fake/.claude/settings.json"
+          fail_one "disableAllHooks" "$fake/bin"
+
+          echo '{"enabledPlugins": {"swift-lsp@claude-plugins-official": true}}' > "$fake/.claude/settings.json"
+          fail_one "plugin not enabled" "$fake/bin"
+
+          echo "$good_settings" > "$fake/.claude/settings.json"
+          echo '{"version": 2, "plugins": {}}' > "$fake/.claude/plugins/installed_plugins.json"
+          fail_one "plugin not installed" "$fake/bin"
+
+          echo "$installed" > "$fake/.claude/plugins/installed_plugins.json"
+          empty=$(mktemp -d)
+          fail_one "ccn-gate absent" "$empty"
+
+          rm -rf "$fake" "$empty"
+
   contract:
     name: the proxy still deserialises what we send
     runs-on: ubuntu-latest

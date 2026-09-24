@@ -1,0 +1,71 @@
+- main [ref=f1e2]:
+  - heading "a gatehouse run verifier 0.0.1" [level=1] [ref=f1e3]:
+    - text: a gatehouse run
+    - generic [ref=f1e4]: verifier 0.0.1
+  - paragraph [ref=f1e5]:
+    - text: Everything on this page comes out of one receipt. The flame graph is the
+    - code [ref=f1e6]: spans
+    - text: the executor measured and
+    - emphasis [ref=f1e7]: signed
+    - text: ", not a log this page scraped; the gate, its scope and its capability are read from the plan the receipt carries. The decision below is not this page's opinion — it is"
+    - code [ref=f1e8]: gatehouse-verify
+    - text: "compiled to wasm, the same crate the lane runs, re-deriving the verdict from the receipt and the trust anchor you paste. Serve this file from anywhere: it can be wrong about nothing you cannot check here."
+  - generic [ref=f1e9]:
+    - text: a
+    - code [ref=f1e10]: DecideInput
+    - text: — receipt, trust anchor, expectation
+  - textbox "a DecideInput — receipt, trust anchor, expectation" [ref=f1e11]:
+    - /placeholder: "{\"receipt\": …, \"trust\": …, \"expect\": …}"
+    - text: "{ \"receipt\": { \"version\": 1, \"session\": { \"session_id\": \"spiffe://gatehouse/job/7\", \"issuer_kid\": \"node-1\", \"issued_at_micros\": 1, \"parent_chain\": [] }, \"projections\": [ { \"kind\": \"ci\", \"body\": { \"binding\": null, \"certificate\": null, \"commit\": \"cccccccccccccccccccccccccccccccccccccccc\", \"env\": \"a40326b85785f14a066d46099b0a4a47f4a32138da606e41fb4d4ed35f4f7ac8\", \"exit_code\": 0, \"finished_micros\": 2, \"gate_def\": \"32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed\", \"gate_name\": \"test\", \"log_blake3\": \"llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll\", \"outputs\": [], \"plan\": \"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\", \"repo\": \"coproduct/nucleus\", \"sandbox\": { \"caps_enforced\": true, \"fs_probe\": \"skipped\", \"image\": \"sha256:iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\", \"net_probe\": \"denied\", \"runner_digest\": \"rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\", \"substrate\": \"k3s\" }, \"scope\": \"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\", \"signer_chain\": [ { \"kid\": \"node-1\", \"kind\": \"job_credential\", \"tier\": \"node_attested\" } ], \"spans\": [ { \"dur_us\": 231388930, \"name\": \"step-0\", \"start_us\": 0 }, { \"dur_us\": 16469226, \"name\": \"step-0/prepare\", \"parent\": 0, \"start_us\": 0 }, { \"dur_us\": 95977871, \"name\": \"step-0/run\", \"parent\": 0, \"start_us\": 16469226 }, { \"dur_us\": 7874763, \"name\": \"step-0/checkpoint\", \"parent\": 0, \"start_us\": 112447097 }, { \"dur_us\": 25009000, \"name\": \"step-1\", \"start_us\": 231388930 }, { \"dur_us\": 5535802, \"name\": \"step-1/prepare\", \"parent\": 4, \"start_us\": 231388930 }, { \"dur_us\": 19473198, \"name\": \"step-1/run\", \"parent\": 4, \"start_us\": 236924732 } ], \"started_micros\": 1, \"tree\": \"tttttttttttttttttttttttttttttttttttttttt\", \"tree_kind\": \"committed\", \"verdict\": \"held\" } } ], \"root_hash_hex\": \"eb817245b47794e0867df1cc1fc1082123c4ef12d00bca5389c81d194cd106b4\", \"signature_b64\": \"EvYwWrWCfEco5UhjITErSJkIENN6+2YRweCauuN2fIfFfnXyykweVh3Pk5QMVCIc5k29IPD9DzlGGeMqEazjDg==\" }, \"trust\": { \"keys\": [ { \"kid\": \"node-1\", \"verifying_key_hex\": \"ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1\", \"tier\": \"node_attested\", \"valid_from\": 2, \"valid_to\": 10 } ], \"log_size\": 5, \"required_log_size\": 5, \"root_hex\": \"d33e785a9fd6de9af6cadb2f8479b78df5d42b67143782b585639835f0a4c016\" }, \"expect\": { \"gate_def\": \"32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed\", \"scope\": \"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\", \"env\": \"a40326b85785f14a066d46099b0a4a47f4a32138da606e41fb4d4ed35f4f7ac8\", \"tree\": \"tttttttttttttttttttttttttttttttttttttttt\", \"plan\": \"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\", \"class\": \"required\", \"context\": null, \"scope_bound\": false }, \"inclusion\": { \"index\": 3, \"size\": 5, \"proof\": [ \"7e86d2ef801a405df86260a535724abea3f1228fb2db064a2531590e281e2a94\", \"a2a90e58478f28cbf45e91ea2993b4cb319aa72bd34bd34dcf4310ed167ce29f\", \"d907d820a48a81770c9ad4cf24d2e024e3d814843d58829e258962b9d3535fc7\" ], \"root_hex\": \"d33e785a9fd6de9af6cadb2f8479b78df5d42b67143782b585639835f0a4c016\" } }"
+  - generic [ref=f1e12]:
+    - button "Verify and draw" [ref=f1e13] [cursor=pointer]
+    - button "Load a sample" [active] [ref=f1e14] [cursor=pointer]
+  - generic [ref=f1e15]: "{ \"Verified\": { \"tier\": \"node_attested\", \"verdict\": { \"repo\": \"coproduct/nucleus\", \"plan\": \"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\", \"gate_name\": \"test\", \"gate_def\": \"32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed\", \"scope\": \"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\", \"env\": \"a40326b85785f14a066d46099b0a4a47f4a32138da606e41fb4d4ed35f4f7ac8\", \"tree\": \"tttttttttttttttttttttttttttttttttttttttt\", \"commit\": \"cccccccccccccccccccccccccccccccccccccccc\", \"tree_kind\": \"committed\", \"verdict\": \"held\", \"exit_code\": 0, \"started_micros\": 1, \"finished_micros\": 2, \"log_blake3\": \"llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll\", \"outputs\": [], \"sandbox\": { \"substrate\": \"k3s\", \"runner_digest\": \"rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\", \"image\": \"sha256:iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\", \"net_probe\": \"denied\", \"fs_probe\": \"skipped\", \"caps_enforced\": true }, \"signer_chain\": [ { \"kid\": \"node-1\", \"kind\": \"job_credential\", \"tier\": \"node_attested\" } ], \"cer"
+  - heading "what ran" [level=2] [ref=f1e16]
+  - table [ref=f1e19]:
+    - rowgroup [ref=f1e20]:
+      - row [ref=f1e21]:
+        - cell "gate" [ref=f1e22]
+        - cell "test" [ref=f1e23]
+      - row [ref=f1e24]:
+        - cell "verdict" [ref=f1e25]
+        - cell "held" [ref=f1e26]
+      - row [ref=f1e27]:
+        - cell "exit code" [ref=f1e28]
+        - cell "0" [ref=f1e29]
+      - row [ref=f1e30]:
+        - cell "repo" [ref=f1e31]
+        - cell "coproduct/nucleus" [ref=f1e32]
+      - row [ref=f1e33]:
+        - cell "commit" [ref=f1e34]
+        - cell "cccccccccccccccccccccccccccccccccccccccc" [ref=f1e35]
+      - row [ref=f1e36]:
+        - cell "tree" [ref=f1e37]
+        - cell "tttttttttttttttttttttttttttttttttttttttt" [ref=f1e38]
+      - row [ref=f1e39]:
+        - cell "scope" [ref=f1e40]
+        - cell "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss" [ref=f1e41]
+      - row [ref=f1e42]:
+        - cell "gate_def" [ref=f1e43]
+        - cell "32fdcde6dba5e4105ad5e56b936a4de5f9199309b48a670e8c3374d75c3ea9ed" [ref=f1e44]
+      - row [ref=f1e45]:
+        - cell "image" [ref=f1e46]
+        - cell "sha256:iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii" [ref=f1e47]
+      - row [ref=f1e48]:
+        - cell "signed by" [ref=f1e49]
+        - cell "job_credential/node_attested" [ref=f1e50]
+      - row [ref=f1e51]:
+        - cell "wall" [ref=f1e52]
+        - cell "1µs" [ref=f1e53]
+  - heading "where the time went" [level=2] [ref=f1e17]
+  - generic [ref=f1e54]:
+    - generic [ref=f1e55]:
+      - generic "step-0 — 231.4s" [ref=f1e56]: step-0 231.4s
+      - generic "step-1 — 25.0s" [ref=f1e57]: step-1 25.0s
+    - generic [ref=f1e58]:
+      - generic "step-0/prepare — 16.5s" [ref=f1e59]: step-0/prepare 16.5s
+      - generic "step-0/run — 96.0s" [ref=f1e60]: step-0/run 96.0s
+      - generic "step-0/checkpoint — 7.9s" [ref=f1e61]: step-0/checkpoint 7.9s
+      - generic "step-1/prepare — 5.5s" [ref=f1e62]: step-1/prepare 5.5s
+      - generic "step-1/run — 19.5s" [ref=f1e63]: step-1/run 19.5s
+  - generic [ref=f1e18]: "No network after load. The wasm decides; this page only draws — which is the split that matters: a drawing you can check by eye, a decision you can check by running it yourself."
