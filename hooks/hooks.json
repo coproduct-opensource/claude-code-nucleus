@@ -1,5 +1,5 @@
 {
-  "description": "Complete mediation: no built-in tool executes on the host. Points at a committed script, not a built binary, so a plugin whose binaries are missing denies rather than failing open. PostToolUse carries an advisory host-free-space event: the failure it watches for kills the builder VM and presents as slow CI, never as a full disk.",
+  "description": "Complete mediation: no built-in tool executes on the host. Points at a committed script, not a built binary, so a plugin whose binaries are missing denies rather than failing open. PostToolUse carries two advisory host events, both watching failures that present as slow CI rather than as an outage: host free space (a full host kills the builder VM, never says \"disk\") and self-hosted runner capacity (an OOM-killed runner exits 0, so nothing restarts it and a third of CI vanishes silently).",
   "hooks": {
     "PreToolUse": [
       {
@@ -25,6 +25,13 @@
             "args": [],
             "timeout": 25,
             "statusMessage": "nucleus: checking host free space"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/runner-warn.sh",
+            "args": [],
+            "timeout": 30,
+            "statusMessage": "nucleus: checking CI runner capacity"
           }
         ]
       }
